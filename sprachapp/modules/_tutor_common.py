@@ -67,14 +67,15 @@ def compute_quality_flags(
     - retell_empty: retell ist inhaltlich zu kurz
     - too_short: q1/q2/q3 ist zu kurz
     - suspected_silence: sehr wahrscheinlich Stille oder starke Wiederholung
-    - hallucination_hit: Whisper-typischer „Geistertext“ (Phrasen / stopword-lastig)
+    - hallucination_hit: Whisper-typischer „Geistertext“ (Standardphrasen / generische Fragmente)
     - stopword_ratio: Anteil Stopwords (Diagnose)
-    - low_quality: Sammelflag für "Warnung anzeigen"
+    - low_quality: Sammel-Flag, triggert Warnung (retell_empty/too_short/asr_empty/suspected/hallucination)
     """
     t_raw = transcript or ""
     t = t_raw.strip()
     t_lower = t.lower()
 
+    # Basic counts
     asr_chars = len(t)
     asr_words = len(t.split()) if t else 0
 
@@ -92,53 +93,55 @@ def compute_quality_flags(
     elif mode.startswith("q"):
         too_short = asr_empty or (wc < min_q_words)
 
-    # Stopword Ratio (nur Diagnose/Heuristik)
-    words = _tokenize_lower(t)
-    stop_ct = sum(1 for w in words if w in STOPWORDS_DE)
-    stopword_ratio = (stop_ct / len(words)) if words else 0.0
+    # Stopword-Quote (Diagnose + Signal)
+    words = [w.strip(".,;:!?\"'()[]{}").lower() for w in t.split()]
+    words = [w for w in words if w]
+    stop_cnt = sum(1 for w in words if w in STOPWORDS_DE)
+    stopword_ratio = (stop_cnt / len(words)) if words else 0.0
 
-    # Phrase-Hit (Whisper-Geistertext)
-    phrase_hit = any(p in t_lower for p in HALLUCINATION_PHRASES)
+    # --- Halluzinations-Detektion (kurz + robust) ---
+    phrase_hit = False
+    for ph in HALLUCINATION_PHRASES:
+        if ph and ph in t_lower:
+            phrase_hit = True
+            break
 
-    # typisch: viele Funktionswörter, wenig Inhalt (oft bei "… dass ich in der" / generische Floskeln)
+    # Sehr typische „Schweige/Noise“-Fragmente: kurz + generischer Start
+    generic_starts = (
+        "das ist der",
+        "das ist die",
+        "das war's",
+        "ich habe jetzt",
+        "ich bin in der stadt",
+        "das ist der erste",
+        "das ist der erste teil",
+        "das ist der erste mal",
+    )
+    generic_fragment = (asr_chars <= 40) and any(t_lower.startswith(gs) for gs in generic_starts)
+
+    # typisch: viele Funktionswörter, wenig Inhalt
     stopword_heavy = (len(words) >= 8 and stopword_ratio >= 0.75)
 
-    hallucination_hit = bool(phrase_hit or stopword_heavy)
+    hallucination_hit = bool(phrase_hit or stopword_heavy or generic_fragment)
 
-    # Silence / Wiederholung grob erkennen
+    # --- suspected_silence (Wiederholung/Stille) ---
     suspected_silence = False
     dur = float(duration_seconds) if duration_seconds is not None else None
 
-    # (A) lange Aufnahme, aber sehr wenig Worte -> wahrscheinlich Stille
+    # 1) lange Aufnahme, aber praktisch keine echten Wörter
     if dur is not None and dur >= 8.0 and asr_words <= 2:
         suspected_silence = True
 
-    # (B) extrem repetitiv (z.B. viele Wörter, aber sehr wenige unique)
+    # 2) extrem repetitiv: viele Wörter, sehr wenig unique
     if wc >= 12 and uniq < 0.20:
         suspected_silence = True
 
-    # ---------------------------------------------------------
-    # C3.1 / C3.2: low_quality konsistent ableiten (aber Flags behalten)
-    # - low_quality soll "Warnung anzeigen" bedeuten
-    # - trotzdem bleiben suspected_silence / hallucination_hit separat erhalten
-    # ---------------------------------------------------------
-    low_quality = False
+    # 3) lange „Geistertexte“ (häufig: Stille → Whisper produziert lange generische Sätze)
+    if wc >= 30 and hallucination_hit:
+        suspected_silence = True
 
-    # PRIORITÄT 1: leer/zu kurz
-    if asr_empty or retell_empty or too_short:
-        low_quality = True
-    # PRIORITÄT 2: starke Wiederholung (auch ohne Phrase)
-    elif wc >= 40 and uniq <= 0.25:
-        low_quality = True
-    # PRIORITÄT 3: langer Text + Halluzinations-Hit
-    elif wc >= 30 and hallucination_hit:
-        low_quality = True
-    # PRIORITÄT 4: stopword-lastig
-    elif wc >= 12 and stopword_ratio >= 0.75:
-        low_quality = True
-    # PRIORITÄT 5: heuristisch Stille
-    elif suspected_silence:
-        low_quality = True
+    # --- low_quality (Warn-Trigger) ---
+    low_quality = bool(asr_empty or retell_empty or too_short or suspected_silence or hallucination_hit)
 
     return {
         "asr_empty": asr_empty,
@@ -148,22 +151,23 @@ def compute_quality_flags(
         "too_short": too_short,
         "suspected_silence": suspected_silence,
         "hallucination_hit": hallucination_hit,
-        "stopword_ratio": round(stopword_ratio, 3),
+        "stopword_ratio": round(float(stopword_ratio), 3),
         "low_quality": low_quality,
     }
 
-
 def print_quality_warnings(*, mode: str, flags: dict) -> None:
     """
-    Einheitliche Warntexte + 1 Debug-Zeile pro Aufnahme.
-    Ziel: MAXIMAL EIN Warn-Block pro Aufnahme (keine Doppelwarnungen).
+    Einheitliche Ausgabe:
+    - genau 1 Debug-Zeile [QWARN] pro Aufnahme
+    - wenn low_quality=False: keine weitere Ausgabe
+    - sonst: genau 1 WARNUNG + genau 1 HINWEIS-Block (Priorität gesteuert)
     """
-    low_quality = bool(flags.get("low_quality"))
     retell_empty = bool(flags.get("retell_empty"))
     too_short = bool(flags.get("too_short"))
     suspected = bool(flags.get("suspected_silence"))
-    hallucination_hit = bool(flags.get("hallucination_hit"))
+    hallucination = bool(flags.get("hallucination_hit"))
     asr_empty = bool(flags.get("asr_empty"))
+    low_quality = bool(flags.get("low_quality"))
 
     # Debug (genau 1x pro Aufnahme)
     print(
@@ -185,53 +189,48 @@ def print_quality_warnings(*, mode: str, flags: dict) -> None:
         )
     )
 
-    # nichts zu melden
-    if not (retell_empty or too_short or asr_empty or low_quality):
+    if not low_quality:
         return
 
-    # PRIORITÄT 1: Kurz/leer (und dann STOP)
-    if asr_empty or retell_empty or too_short:
-        print("WARNUNG: Antwort ist leer oder zu kurz.")
+    # Genau 1 WARNUNG
+    print("WARNUNG: Antwort wirkt inhaltlich unzuverlässig (ASR/Geistertext/Stille/zu kurz).")
 
-        if mode == "retell" and retell_empty:
-            print("HINWEIS (Retell):")
-            print("- Gib den Inhalt in 2–4 ganzen Sätzen wieder.")
-            print("- Starte direkt mit dem Kern: Was ist passiert/was ist die Aussage?")
-            print("- Vermeide reine Abbruch-Sätze wie „fertig“, „das war’s“.")
+    # Genau 1 HINWEIS-Block, mit Priorität:
+    # 1) echte Audio-Probleme/leer
+    # 2) Stille/Wiederholung
+    # 3) Geistertext
+    # 4) zu kurz (retell / q)
+    print("HINWEIS:")
 
-        if mode.startswith("q") and too_short:
-            print("HINWEIS (Frage):")
-            print("- Antworte vollständiger (mindestens 1–2 Sätze).")
-            print("- Bleib beim Inhalt des Abschnitts/der Frage.")
-
-        if asr_empty:
-            print("HINWEIS (Audio/ASR):")
-            print("- Sprich lauter/näher ans Mikrofon.")
-            print("- Prüfe Input-Device (--device).")
-            print("- Wenn --cut-punkt: am Ende deutlich 'punkt' sagen oder ohne testen.")
+    if asr_empty:
+        print("- Sprich lauter/näher ans Mikrofon.")
+        print("- Prüfe Input-Device (--device).")
+        print("- Wenn --cut-punkt: am Ende deutlich 'punkt' sagen oder ohne testen.")
         return
 
-    # PRIORITÄT 2: Geistertext (und dann STOP)
-    if hallucination_hit:
-        print("WARNUNG: Antwort wirkt wie ASR-Geistertext (inhaltlich unzuverlässig).")
-        print("HINWEIS (ASR-Geistertext):")
+    if suspected:
+        print("- Es klingt nach Stille/Wiederholung; Whisper hat evtl. Text geraten.")
+        print("- Wiederhole kurz: 1–2 klare Sätze zum Inhalt, näher ans Mikro.")
+        return
+
+    if hallucination:
         print("- Whisper hat vermutlich aus Stille/Hintergrundgeräusch Text geraten.")
         print("- Wiederhole 1–2 klare Sätze zum Inhalt (nicht über „Video/Teil“ sprechen).")
         return
 
-    # PRIORITÄT 3: Stille/Wiederholung (und dann STOP)
-    if suspected:
-        print("WARNUNG: Aufnahme wirkt wie Stille/Wiederholung (inhaltlich unzuverlässig).")
-        print("HINWEIS (Stille/ASR):")
-        print("- Es klingt nach Stille/Hintergrundgeräusch; Whisper hat evtl. Text geraten.")
-        print("- Wiederhole kurz: 1–2 klare Sätze, näher ans Mikro.")
+    # Fallback: zu kurz (retell/q)
+    if mode == "retell" and retell_empty:
+        print("- Gib den Inhalt in 2–4 ganzen Sätzen wieder.")
+        print("- Starte direkt mit dem Kern (Was ist passiert?).")
+        print("- Vermeide Abbruch-Sätze wie „fertig“, „das war’s“.")
         return
 
-    # PRIORITÄT 4: generisch low_quality (Fallback) (und dann STOP)
-    if low_quality:
-        print("WARNUNG: Antwort wirkt inhaltlich unzuverlässig (ASR/Geistertext/Stille).")
-        print("HINWEIS:")
-        print("- Wiederhole 1–2 klare Sätze zum Inhalt.")
-        print("- Sprich ruhig, deutlich und näher ins Mikro.")
-        print("- Prüfe Input-Device (--device).")
+    if mode.startswith("q") and too_short:
+        print("- Antworte vollständiger (mindestens 1–2 Sätze).")
+        print("- Bleib beim Inhalt des Abschnitts/der Frage.")
         return
+
+    # Letzter Fallback (sollte praktisch nie passieren)
+    print("- Wiederhole 1–2 klare Sätze zum Inhalt.")
+    print("- Sprich ruhig, deutlich und näher ins Mikro.")
+    print("- Prüfe Input-Device (--device).")
