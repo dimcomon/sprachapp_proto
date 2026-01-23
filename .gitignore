@@ -1,10 +1,37 @@
+# =========================
+# Python
+# =========================
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
-.DS_Store
-data/audio/*.wav
 
-# local runtime data (do not commit)
+# =========================
+# macOS
+# =========================
+.DS_Store
+**/.DS_Store
+
+# =========================
+# Runtime / Generated Data
+# =========================
+
+# Audio recordings
+data/audio/
+*.wav
+
+# Databases
 data/*.sqlite3
+data/*.sqlite
+data/*.db
+
+# Progress / runtime state
 data/*_progress.json
+
+# =========================
+# Secrets / Credentials
+# =========================
+github_pat_*
+*.pem
+*.key
+*.p12
