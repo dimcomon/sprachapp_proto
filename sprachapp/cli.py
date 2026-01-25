@@ -120,8 +120,8 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--keep-days", type=int, default=0, help="Löscht WAVs älter als X Tage.")
     s.add_argument("--suggest-k", type=int, default=8, help="Anzahl Zielbegriffe.")
 
-    # book (MVP1)
-    b = sub.add_parser("book", help="MVP1: Buch/TXT Tutor (Chunk -> retell -> Fragen)")
+    # book
+    b = sub.add_parser("book", help="Buch/TXT Tutor (Chunk -> retell -> Fragen)")
     b.add_argument("--book-file", required=True, help="TXT-Datei (Buch/Kapitel).")
     b.add_argument("--words-per-chunk", type=int, default=220, help="Wörter pro Abschnitt.")
     b.add_argument("--chunk", type=int, default=None, help="Expliziter Chunk-Index (0-basiert).")
@@ -152,8 +152,8 @@ def build_parser() -> argparse.ArgumentParser:
         r.add_argument("--csv", default=None, help="Optional: CSV-Datei schreiben, z.B. out.csv")
         r.add_argument("--summary", action="store_true", help="Zeigt Durchschnittswerte (Trend) statt Tabelle.")
     
-    # news (MVP2-A)
-    n = sub.add_parser("news", help="MVP2-A: News/TXT Tutor (Chunk -> retell -> Fragen)")
+    # news
+    n = sub.add_parser("news", help="News/TXT Tutor (Chunk -> retell -> Fragen)")
     n.add_argument("--news-file", required=True, help="TXT-Datei mit News/Inhalt.")
     n.add_argument("--words-per-chunk", type=int, default=220, help="Wörter pro Abschnitt.")
     n.add_argument("--chunk", type=int, default=None, help="Expliziter Chunk-Index (0-basiert).")
