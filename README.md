@@ -13,7 +13,7 @@ Bewertung und Speicherung strukturierter Sprachantworten (News / Book / Selfchec
 python3 sprachapp_main.py news
 python3 sprachapp_main.py book
 python3 sprachapp_main.py selfcheck
-python3 sprachapp_main.py stats | report
+python3 sprachapp_main.py report --last 20   # Alias: stats
 
 ## Dokumentation
 - RUN.md – lokaler Start & Setup
