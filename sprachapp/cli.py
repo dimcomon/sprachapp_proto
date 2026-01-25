@@ -197,6 +197,12 @@ def main():
     if args.cmd in ("stats", "report"):
         rows = fetch_last_sessions(last=args.last, mode=args.mode)
 
+        if not rows:
+            print("Keine Sessions gefunden.")
+            print("Tipp: Erzeuge zuerst Sessions mit 'news' oder 'book', dann:")
+            print("  python3 sprachapp_main.py report --last 20")
+            return
+
         if args.summary:
             print_summary(rows)
         else:
