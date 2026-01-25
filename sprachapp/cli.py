@@ -142,12 +142,15 @@ def build_parser() -> argparse.ArgumentParser:
     b.add_argument("--cut-punkt", action="store_true", help="Schneidet Transkript bis letztes 'punkt'.")
     b.add_argument("--keep-last-audios", type=int, default=10, help="Behält nur die letzten N WAVs.")
 
-    # stats (Report)
-    r = sub.add_parser("stats", help="Zeigt die letzten Sessions (Tabelle) und optional CSV-Export.")
-    r.add_argument("--last", type=int, default=20, help="Anzahl letzter Sessions.")
-    r.add_argument("--mode", default=None, help="Filter: retell, q1, q2, q3, read ...")
-    r.add_argument("--csv", default=None, help="Optional: CSV-Datei schreiben, z.B. out.csv")
-    r.add_argument("--summary", action="store_true",help="Zeigt Durchschnittswerte (Trend) statt Tabelle.")
+    # stats / report (Report)
+    stats_p = sub.add_parser("stats", help="Zeigt die letzten Sessions (Tabelle) und optional CSV-Export.")
+    report_p = sub.add_parser("report", help="Alias für 'stats' (zeigt die letzten Sessions und optional CSV-Export).")
+
+    for r in (stats_p, report_p):
+        r.add_argument("--last", type=int, default=20, help="Anzahl letzter Sessions.")
+        r.add_argument("--mode", default=None, help="Filter: retell, q1, q2, q3, read ...")
+        r.add_argument("--csv", default=None, help="Optional: CSV-Datei schreiben, z.B. out.csv")
+        r.add_argument("--summary", action="store_true", help="Zeigt Durchschnittswerte (Trend) statt Tabelle.")
     
     # news (MVP2-A)
     n = sub.add_parser("news", help="MVP2-A: News/TXT Tutor (Chunk -> retell -> Fragen)")
@@ -191,7 +194,7 @@ def main():
         cmd_speak(args)
         return
 
-    if args.cmd == "stats":
+    if args.cmd in ("stats", "report"):
         rows = fetch_last_sessions(last=args.last, mode=args.mode)
 
         if args.summary:
