@@ -114,7 +114,7 @@ def cmd_focus_q1(args: argparse.Namespace) -> None:
     minutes = max(0.01, q_seconds / 60.0)
 
     print(f"FOCUS q1: {rounds} Runden á {int(q_seconds)}s")
-    print("Aufgabe: Formuliere die Kernaussage in genau 1 Satz.\n")
+    print("Aufgabe: Antworte als Q1 (These). Genau 1 Satz, ohne Wiederholung.\n")
 
     for i in range(1, rounds + 1):
         ts = datetime.now(UTC).strftime("%Y-%m-%dT%H-%M-%S")
