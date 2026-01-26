@@ -15,6 +15,7 @@ from sprachapp.modules.selfcheck import run_selfcheck
 from sprachapp.modules.tutor_news import run_news_session
 from sprachapp.modules._tutor_common import compute_quality_flags, print_quality_warnings
 
+
 def cmd_speak(args: argparse.Namespace) -> None:
     ensure_db()
 
@@ -167,6 +168,73 @@ def cmd_focus_q1(args: argparse.Namespace) -> None:
     print("TIPP: Fortschritt ansehen mit: python3 sprachapp_main.py report --progress --last 200")
 
 
+def cmd_focus_retell(args: argparse.Namespace) -> None:
+    """
+    Minimaler Fokus-Run: wiederholt retell N-mal kurz hintereinander.
+    - nutzt vorhandene Audio/ASR/Stats/Quality-Flags
+    - speichert Sessions wie gewohnt
+    - greift NICHT in book/news-progress ein
+    """
+    ensure_db()
+
+    from datetime import datetime, UTC
+
+    rounds = int(args.rounds)
+    minutes = float(args.minutes)
+
+    print(f"FOCUS retell: {rounds} Runden á {minutes:.2f} min")
+    print("Aufgabe: Kurzes Retell. 2–4 Sätze, ohne Wiederholung.\n")
+
+    for i in range(1, rounds + 1):
+        ts = datetime.now(UTC).strftime("%Y-%m-%dT%H-%M-%S")
+        out = Path("data/audio") / f"{ts}_focus-retell_r{i}.wav"
+
+        print(f"--- Runde {i}/{rounds} ---")
+        record_mic_to_wav(out_path=out, minutes=minutes, device=args.device)
+
+        raw = transcribe_with_whisper(str(out))
+        transcript = normalize_text(raw)
+
+        stats = compute_stats(transcript)
+
+        dur_s = None
+        try:
+            dur_s = wav_duration_seconds(out)
+        except Exception:
+            dur_s = None
+
+        payload = stats.__dict__.copy()
+        payload["duration_seconds"] = round(dur_s, 2) if dur_s else None
+        payload["wpm"] = round(stats.word_count / (dur_s / 60.0), 1) if dur_s and dur_s > 0 else None
+
+        flags = compute_quality_flags(
+            mode="retell",
+            transcript=transcript,
+            stats_obj=stats,
+            duration_seconds=dur_s,
+        )
+        payload.update(flags)
+
+        print_quality_warnings(mode="retell", flags=flags)
+
+        session_id = insert_session(
+            topic="focus:retell",
+            mode="retell",
+            source_text=None,
+            transcript=transcript,
+            stats_payload=payload,
+            audio_path=str(out),
+        )
+
+        print(f"\nSession gespeichert: id={session_id} | mode=retell")
+        print(f"Transkript:\n{transcript}\n")
+
+    cleanup_audio_retention(Path("data/audio"), keep_last=10, keep_days=0)
+
+    print("Fokus-Run beendet.")
+    print("TIPP: Fortschritt ansehen mit: python3 sprachapp_main.py report --progress --last 200")
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="sprachapp")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -222,13 +290,14 @@ def build_parser() -> argparse.ArgumentParser:
         r.add_argument("--only-lowq", action="store_true", help="Zeigt nur Sessions mit low_quality=True.")
         r.add_argument("--only-empty", action="store_true", help="Zeigt nur Sessions mit asr_empty=True.")    
     
-    # focus (minimal: nur q1)
-    f = sub.add_parser("focus", help="Fokus-Run: wiederholt einen Modus kurz (minimal: q1).")
-    f.add_argument("mode", choices=["q1"], help="Fokus-Modus (minimal: q1).")
+    # focus (minimal: q1 + retell)
+    f = sub.add_parser("focus", help="Fokus-Run: wiederholt einen Modus kurz (minimal: q1, retell).")
+    f.add_argument("mode", choices=["q1", "retell"], help="Fokus-Modus (minimal: q1, retell).")
     f.add_argument("--rounds", type=int, default=3, help="Anzahl Wiederholungen.")
-    f.add_argument("--q-seconds", type=int, default=15, help="Aufnahmezeit pro Runde in Sekunden.")
+    f.add_argument("--q-seconds", type=int, default=15, help="Nur für q1: Aufnahmezeit pro Runde in Sekunden.")
+    f.add_argument("--minutes", type=float, default=0.5, help="Nur für retell: Aufnahmezeit pro Runde in Minuten.")
     f.add_argument("--device", type=int, default=None, help="Input-Device-ID (optional).")
-
+   
     # news
     n = sub.add_parser("news", help="News/TXT Tutor (Chunk -> retell -> Fragen)")
     n.add_argument("--news-file", required=True, help="TXT-Datei mit News/Inhalt.")
@@ -271,6 +340,9 @@ def main():
     if args.cmd == "focus":
         if args.mode == "q1":
             cmd_focus_q1(args)
+            return
+        if args.mode == "retell":
+            cmd_focus_retell(args)
             return
         raise SystemExit(f"Unsupported focus mode: {args.mode}")
 
