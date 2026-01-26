@@ -284,6 +284,8 @@ def print_progress(rows: list[Row]) -> None:
         return f"{x:.{d}f}"
 
     print("PROGRESS (je Modus, Median für wpm/uniq):")
+    best_reco = None
+    best_prio = 999  # kleiner = wichtiger
     for mode, items in sorted(groups.items()):
         wpm = _median([x.wpm for x in items])
         uniq = _median([x.unique_ratio for x in items])
@@ -313,4 +315,31 @@ def print_progress(rows: list[Row]) -> None:
                 print(f"     TIPP: kürzer wiederholen; 1–2 klare Sätze, näher ans Mikro")
             if empty is not None and empty >= 0.34:
                 print(f"     TIPP: Eingabegerät, Pegel (Gain) und Umgebungsgeräusche prüfen")
+        
+        # Empfehlung (B2.2): Kandidaten sammeln (global wird 1x gedruckt)
+        reco = None
+        prio = None
+
+        if empty is not None and empty >= 0.34:
+            prio = 1
+            reco = f"NEXT (global): Technik – Eingabegerät/Pegel prüfen, 1 Testaufnahme (selfcheck --smoke-asr)"
+
+        elif lowq is not None and lowq >= 0.34:
+            prio = 2
+            reco = f"NEXT (global): Qualität – 3x sehr kurz (1–2 Sätze), näher ans Mikro, danach erneut q1/retell"
+
+        elif wc is not None and wc < 12:
+            prio = 3
+            reco = f"NEXT (global): Länge – mindestens 2 Sätze / ~20 Wörter"
+
+        elif uniq is not None and uniq < 0.55:
+            prio = 4
+            reco = f"NEXT (global): Wortschatz – vermeide Wiederholung, nutze 2 Synonyme/Umformulierungen."
+
+        if reco and prio is not None and prio < best_prio:
+            best_prio = prio
+            best_reco = reco
+    if best_reco:
+        print(best_reco)
+
 
