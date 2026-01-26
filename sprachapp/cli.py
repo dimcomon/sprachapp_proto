@@ -10,9 +10,10 @@ from sprachapp.core.text import normalize_text, cut_at_punkt, overlap_metrics
 from sprachapp.core.stats import compute_stats, suggest_target_terms, terms_used
 
 from sprachapp.modules.tutor_book import run_book_session
-from sprachapp.modules.report import fetch_last_sessions, print_table, write_csv, print_summary
+from sprachapp.modules.report import fetch_last_sessions, print_table, write_csv, print_summary, print_progress
 from sprachapp.modules.selfcheck import run_selfcheck
 from sprachapp.modules.tutor_news import run_news_session
+
 
 def cmd_speak(args: argparse.Namespace) -> None:
     ensure_db()
@@ -151,7 +152,9 @@ def build_parser() -> argparse.ArgumentParser:
         r.add_argument("--mode", default=None, help="Filter: retell, q1, q2, q3, read ...")
         r.add_argument("--csv", default=None, help="Optional: CSV-Datei schreiben, z.B. out.csv")
         r.add_argument("--summary", action="store_true", help="Zeigt Durchschnittswerte (Trend) statt Tabelle.")
-    
+        r.add_argument("--progress", action="store_true", help="Fortschritt je Modus (Median: wc/wpm/uniq, Quoten: lowq/empty).")
+        r.add_argument("--only-lowq", action="store_true", help="Zeigt nur Sessions mit low_quality=True.")
+        r.add_argument("--only-empty", action="store_true", help="Zeigt nur Sessions mit asr_empty=True.")    
     # news
     n = sub.add_parser("news", help="News/TXT Tutor (Chunk -> retell -> Fragen)")
     n.add_argument("--news-file", required=True, help="TXT-Datei mit News/Inhalt.")
@@ -197,13 +200,25 @@ def main():
     if args.cmd in ("stats", "report"):
         rows = fetch_last_sessions(last=args.last, mode=args.mode)
 
+        if getattr(args, "only_lowq", False):
+            rows = [x for x in rows if x.low_quality is True]
+
+        if getattr(args, "only_empty", False):
+            rows = [x for x in rows if x.asr_empty is True]
+
         if not rows:
+            # CSV soll auch bei 0 Zeilen erzeugt werden (mindestens Header).
+            if args.csv:
+                write_csv(rows, args.csv)
+
             print("Keine Sessions gefunden.")
             print("Tipp: Erzeuge zuerst Sessions mit 'news' oder 'book', dann:")
             print("  python3 sprachapp_main.py report --last 20")
             return
 
-        if args.summary:
+        if args.progress:
+            print_progress(rows)
+        elif args.summary:
             print_summary(rows)
         else:
             print_table(rows)

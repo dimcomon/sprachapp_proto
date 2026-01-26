@@ -8,7 +8,7 @@ from typing import Any
 from sprachapp.core.db import get_con
 
 from collections import defaultdict
-from statistics import mean
+from statistics import mean, median
 
 
 @dataclass
@@ -22,7 +22,10 @@ class Row:
     target_rate: float | None
     bonus_rate: float | None
     q3ok: bool | None = None 
-    asr_empty: bool | None = None  # <-- NEU
+    asr_empty: bool | None = None
+    low_quality: bool | None = None
+    word_count: int | None = None
+
 
 
 def _safe_float(x: Any) -> float | None:
@@ -109,6 +112,14 @@ def fetch_last_sessions(last: int = 20, mode: str | None = None) -> list[Row]:
             elif v is False:
                 asr_empty = False
 
+        low_quality = None
+        if isinstance(payload, dict) and "low_quality" in payload:
+            v = payload.get("low_quality")
+            if v is True:
+                low_quality = True
+            elif v is False:
+                low_quality = False
+
         q3ok = None
         if (mode_val or "") == "q3" and isinstance(payload, dict):
             v = payload.get("q3_has_causal")
@@ -116,6 +127,13 @@ def fetch_last_sessions(last: int = 20, mode: str | None = None) -> list[Row]:
                 q3ok = True
             elif v is False:
                 q3ok = False
+
+        word_count = None
+        if isinstance(payload, dict) and "word_count" in payload:
+            try:
+                word_count = int(payload.get("word_count"))
+            except Exception:
+                word_count = None
 
         out.append(
             Row(
@@ -128,7 +146,9 @@ def fetch_last_sessions(last: int = 20, mode: str | None = None) -> list[Row]:
                 target_rate=target_rate,
                 bonus_rate=bonus_rate,
                 q3ok=q3ok,
-                asr_empty=asr_empty,              # <-- NEU
+                asr_empty=asr_empty,
+                low_quality=low_quality,
+                word_count=word_count,
             )
         )
 
@@ -235,3 +255,62 @@ def print_summary(rows: list[Row]) -> None:
             f"- {mode:6s} | n={len(items):3d} | wpm={f(wpm,1)} | uniq={f(uniq,3)} | target={f(targ,3)} | bonus={f(bon,3)} | "
             + " | ".join(extra)
         )
+def print_progress(rows: list[Row]) -> None:
+    if not rows:
+        print("Keine Sessions gefunden.")
+        return
+
+    groups = defaultdict(list)
+    for r in rows:
+        groups[(r.mode or "").strip()].append(r)
+
+    def avg(vals):
+        vals = [v for v in vals if v is not None]
+        return None if not vals else mean(vals)
+
+    def _median(vals):
+        vals = [v for v in vals if v is not None]
+        return None if not vals else median(vals)
+
+    def rate_bool(vals, want=True):
+        vals = [v for v in vals if v is not None]
+        if not vals:
+            return None
+        return sum(1 for v in vals if v is want) / len(vals)
+
+    def f(x, d=2):
+        if x is None:
+            return "-"
+        return f"{x:.{d}f}"
+
+    print("PROGRESS (je Modus, Median für wpm/uniq):")
+    for mode, items in sorted(groups.items()):
+        wpm = _median([x.wpm for x in items])
+        uniq = _median([x.unique_ratio for x in items])
+        lowq = rate_bool([x.low_quality for x in items], want=True)
+        empty = rate_bool([x.asr_empty for x in items], want=True)
+        extra = [f"lowq={f(lowq,2)}", f"empty={f(empty,2)}"]
+        wc = _median([x.word_count for x in items])
+
+        if mode == "q3":
+            q3ok = rate_bool([x.q3ok for x in items], want=True)
+            extra.append(f"q3ok={f(q3ok,2)}")
+
+        print(
+            f"- {mode:6s} | n={len(items):3d} | wc={f(wc,0)} | wpm={f(wpm,1)} | uniq={f(uniq,3)} | "
+            + " | ".join(extra)
+        )
+
+        # Diagnose (rein aus Quoten, keine neue Heuristik)
+        notes = []
+        if lowq is not None and lowq >= 0.34:
+            notes.append("CHECK: häufige Qualitätsprobleme")
+        if empty is not None and empty >= 0.34:
+            notes.append("CHECK: häufig ASR-leer")
+        if notes:
+            print(f"  -> {mode:6s} | " + " | ".join(notes))
+            if lowq is not None and lowq >= 0.34:
+                print(f"     TIPP: kürzer wiederholen; 1–2 klare Sätze, näher ans Mikro")
+            if empty is not None and empty >= 0.34:
+                print(f"     TIPP: Eingabegerät, Pegel (Gain) und Umgebungsgeräusche prüfen")
+
