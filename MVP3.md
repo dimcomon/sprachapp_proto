@@ -12,3 +12,4 @@ Ziel: Funktionale Erweiterungen auf stabiler MVP2-Basis (keine Änderungen an Qu
 - Neuer CLI-Modus: `focus q1` für gezieltes, kurzes Wiederholen
 - Sessions werden normal gespeichert, kein Eingriff in Chunk- oder Lernfortschritt
 - Auswertung anschließend über `report --progress`
+- `focus retell` für kurzes Retell-Training (z. B. 2 Runden à 0.5 min)
