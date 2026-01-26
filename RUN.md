@@ -22,6 +22,8 @@ python3 sprachapp_main.py selfcheck
 ### Focus (gezieltes Üben)
 # 3x Frage 1 (These) kurz üben
 python3 sprachapp_main.py focus q1 --rounds 3 --q-seconds 15
+# 2x Retell kurz üben (30s pro Runde)
+python3 sprachapp_main.py focus retell --rounds 2 --minutes 0.5
 
 # danach Fortschritt ansehen
 python3 sprachapp_main.py report --progress --last 200
