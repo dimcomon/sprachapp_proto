@@ -269,6 +269,7 @@ def _record_and_transcribe(
     )
 
     print(f"\nSession gespeichert: id={session_id} | mode={mode}")
+    print("TIPP: Fortschritt ansehen mit: python3 sprachapp_main.py report --progress --last 200")
     print(f"Transkript:\n{transcript}\n")
     print("Stats:", payload)
 
