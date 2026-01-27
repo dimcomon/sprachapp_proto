@@ -89,7 +89,7 @@ def cmd_speak(args: argparse.Namespace) -> None:
 
     print(f"\nSession gespeichert: id={session_id}")
     print(f"Transkription{' (gekürzt bis punkt)' if args.cut_punkt else ''}:\n{transcript}\n")
-    print("Stats:", payload)
+    print("Auswertung:", payload)
 
     if args.mode == "retell" and args.source_text and payload.get("target_terms"):
         print("\nNeue Ziel-Begriffe (für nächste Wiedergabe):")
@@ -98,12 +98,12 @@ def cmd_speak(args: argparse.Namespace) -> None:
     if prev:
         print(f"\nLetzte Session war id={prev.get('id')} | mode={prev.get('mode')} | topic={prev.get('topic')}")
 
-
+# Focus q1
 def cmd_focus_q1(args: argparse.Namespace) -> None:
     """
     Minimaler Fokus-Run: wiederholt q1 N-mal kurz hintereinander.
-    - nutzt vorhandene Audio/ASR/Stats/Quality-Flags
-    - speichert Sessions wie gewohnt
+    - nutzt vorhandene Audio/ASR/Auswertung/Quality-Flags
+    - speichert Einträge wie gewohnt
     - greift NICHT in book/news-progress ein
     """
     ensure_db()
@@ -167,12 +167,152 @@ def cmd_focus_q1(args: argparse.Namespace) -> None:
     print("Fokus-Run beendet.")
     print("TIPP: Fortschritt ansehen mit: python3 sprachapp_main.py report --progress --last 200")
 
+# Focus q2
+def cmd_focus_q2(args: argparse.Namespace) -> None:
+    """
+    Minimaler Fokus-Run: wiederholt q2 N-mal kurz hintereinander.
+    - nutzt vorhandene Audio/ASR/Auswertung/Quality-Flags
+    - speichert Einträge wie gewohnt
+    - greift NICHT in book/news-progress ein
+    """
+    ensure_db()
+
+    from datetime import datetime, UTC
+
+    rounds = int(args.rounds)
+    q_seconds = float(args.q_seconds)
+    minutes = max(0.01, q_seconds / 60.0)
+
+    print(f"FOCUS q2: {rounds} Runden á {int(q_seconds)}s")
+    print("Aufgabe: Antworte als Q2 (Begründung). 1–2 Sätze, mit weil/denn.\n")
+    for i in range(1, rounds + 1):
+        ts = datetime.now(UTC).strftime("%Y-%m-%dT%H-%M-%S")
+        out = Path("data/audio") / f"{ts}_focus-q2_r{i}.wav"
+
+        print(f"--- Runde {i}/{rounds} ---")
+        record_mic_to_wav(out_path=out, minutes=minutes, device=args.device)
+
+        raw = transcribe_with_whisper(str(out))
+        transcript = normalize_text(raw)
+
+        stats = compute_stats(transcript)
+
+        dur_s = None
+        try:
+            dur_s = wav_duration_seconds(out)
+        except Exception:
+            dur_s = None
+
+        payload = stats.__dict__.copy()
+        payload["duration_seconds"] = round(dur_s, 2) if dur_s else None
+        payload["wpm"] = round(stats.word_count / (dur_s / 60.0), 1) if dur_s and dur_s > 0 else None
+
+        flags = compute_quality_flags(
+            mode="q2",
+            transcript=transcript,
+            stats_obj=stats,
+            duration_seconds=dur_s,
+        )
+        payload.update(flags)
+
+        print_quality_warnings(mode="q2", flags=flags)
+
+        session_id = insert_session(
+            topic="focus:q2",
+            mode="q2",
+            source_text=None,
+            transcript=transcript,
+            stats_payload=payload,
+            audio_path=str(out),
+        )
+
+        print(f"\nSession gespeichert: id={session_id} | mode=q2")
+        print(f"Transkript:\n{transcript}\n")
+
+    # optional: kleine Hygiene (wie sonst auch)
+    cleanup_audio_retention(Path("data/audio"), keep_last=10, keep_days=0)
+
+    print("Fokus-Run beendet.")
+    print("TIPP: Fortschritt ansehen mit: python3 sprachapp_main.py report --progress --last 200")
+
+
+# Focus q3
+def cmd_focus_q3(args: argparse.Namespace) -> None:
+    """
+    Minimaler Fokus-Run: wiederholt q3 N-mal kurz hintereinander.
+    - nutzt vorhandene Audio/ASR/Auswertung/Quality-Flags
+    - speichert Einträge wie gewohnt
+    - greift NICHT in book/news-progress ein
+    """
+    ensure_db()
+
+    from datetime import datetime, UTC
+
+    rounds = int(args.rounds)
+    q_seconds = float(args.q_seconds)
+    minutes = max(0.01, q_seconds / 60.0)
+
+    print(f"FOCUS q3: {rounds} Runden á {int(q_seconds)}s")
+    print("Aufgabe: Antworte als Q3 (Begründung mit Ursache/Wirkung). 1–2 Sätze, mit weil/deshalb.\n")
+    for i in range(1, rounds + 1):
+        ts = datetime.now(UTC).strftime("%Y-%m-%dT%H-%M-%S")
+        out = Path("data/audio") / f"{ts}_focus-q3_r{i}.wav"
+
+        print(f"--- Runde {i}/{rounds} ---")
+        record_mic_to_wav(out_path=out, minutes=minutes, device=args.device)
+
+        raw = transcribe_with_whisper(str(out))
+        transcript = normalize_text(raw)
+
+        stats = compute_stats(transcript)
+
+        dur_s = None
+        try:
+            dur_s = wav_duration_seconds(out)
+        except Exception:
+            dur_s = None
+
+        payload = stats.__dict__.copy()
+        payload["duration_seconds"] = round(dur_s, 2) if dur_s else None
+        payload["wpm"] = round(stats.word_count / (dur_s / 60.0), 1) if dur_s and dur_s > 0 else None
+
+        t_low = transcript.lower()
+        payload["q3_has_causal"] = ("weil" in t_low) or ("deshalb" in t_low)
+
+        flags = compute_quality_flags(
+            mode="q3",
+            transcript=transcript,
+            stats_obj=stats,
+            duration_seconds=dur_s,
+        )
+        payload.update(flags)
+
+        print_quality_warnings(mode="q3", flags=flags)
+
+        session_id = insert_session(
+            topic="focus:q3",
+            mode="q3",
+            source_text=None,
+            transcript=transcript,
+            stats_payload=payload,
+            audio_path=str(out),
+        )
+
+        print(f"\nSession gespeichert: id={session_id} | mode=q3")
+        print(f"Transkript:\n{transcript}\n")
+
+    # optional: kleine Hygiene (wie sonst auch)
+    cleanup_audio_retention(Path("data/audio"), keep_last=10, keep_days=0)
+
+    print("Fokus-Run beendet.")
+    print("TIPP: Fortschritt ansehen mit: python3 sprachapp_main.py report --progress --last 200")
+
 
 def cmd_focus_retell(args: argparse.Namespace) -> None:
     """
     Minimaler Fokus-Run: wiederholt retell N-mal kurz hintereinander.
-    - nutzt vorhandene Audio/ASR/Stats/Quality-Flags
-    - speichert Sessions wie gewohnt
+    - nutzt vorhandene Audio/ASR/Auswertung/Quality-Flags
+    - speichert Einträge wie gewohnt
     - greift NICHT in book/news-progress ein
     """
     ensure_db()
@@ -240,7 +380,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub = p.add_subparsers(dest="cmd", required=True)
 
     # speak
-    s = sub.add_parser("speak", help="Aufnehmen/Transkribieren/Stats (read|retell)")
+    s = sub.add_parser("speak", help="Aufnehmen/Transkribieren/Auswertung (read|retell)")
     s.add_argument("--list-devices", action="store_true", help="Zeigt verfügbare Input-Geräte an.")
     s.add_argument("--audio", default=None, help="Pfad zur Audio-Datei (wav/mp3/m4a).")
     s.add_argument("--record", action="store_true", help="Nimmt Audio vom Mikrofon auf und speichert es als WAV.")
@@ -278,24 +418,24 @@ def build_parser() -> argparse.ArgumentParser:
     b.add_argument("--keep-last-audios", type=int, default=10, help="Behält nur die letzten N WAVs.")
 
     # stats / report (Report)
-    stats_p = sub.add_parser("stats", help="Zeigt die letzten Sessions (Tabelle) und optional CSV-Export.")
-    report_p = sub.add_parser("report", help="Alias für 'stats' (zeigt die letzten Sessions und optional CSV-Export).")
+    stats_p = sub.add_parser("stats", help="Zeigt die letzten Einträge (Tabelle) und optional CSV-Export.")
+    report_p = sub.add_parser("report", help="Alias für 'stats' (zeigt die letzten Einträge und optional CSV-Export).")
 
     for r in (stats_p, report_p):
-        r.add_argument("--last", type=int, default=20, help="Anzahl letzter Sessions.")
+        r.add_argument("--last", type=int, default=20, help="Anzahl letzter Einträge.")
         r.add_argument("--mode", default=None, help="Filter: retell, q1, q2, q3, read ...")
         r.add_argument("--csv", default=None, help="Optional: CSV-Datei schreiben, z.B. out.csv")
         r.add_argument("--summary", action="store_true", help="Zeigt Durchschnittswerte (Trend) statt Tabelle.")
         r.add_argument("--progress", action="store_true", help="Fortschritt je Modus (Median: wc/wpm/uniq, Quoten: lowq/empty).")
-        r.add_argument("--only-lowq", action="store_true", help="Zeigt nur Sessions mit low_quality=True.")
-        r.add_argument("--only-empty", action="store_true", help="Zeigt nur Sessions mit asr_empty=True.")    
+        r.add_argument("--only-lowq", action="store_true", help="Zeigt nur Einträge mit low_quality=True.")
+        r.add_argument("--only-empty", action="store_true", help="Zeigt nur Einträge mit asr_empty=True.")    
     
-    # focus (minimal: q1 + retell)
-    f = sub.add_parser("focus", help="Fokus-Run: wiederholt einen Modus kurz (minimal: q1, retell).")
-    f.add_argument("mode", choices=["q1", "retell"], help="Fokus-Modus (minimal: q1, retell).")
+    # focus (minimal: q1/q2/q3/retell)
+    f = sub.add_parser("focus", help="Fokus-Run: gezieltes Üben eines Modus (q1/q2/q3/retell).")
+    f.add_argument("mode", choices=["q1", "q2", "q3", "retell"], help="Fokus-Modus (q1=These, q2=Begründung, q3=Ursache/Wirkung, retell=Zusammenfassung).")
     f.add_argument("--rounds", type=int, default=3, help="Anzahl Wiederholungen.")
-    f.add_argument("--q-seconds", type=int, default=15, help="Nur für q1: Aufnahmezeit pro Runde in Sekunden.")
-    f.add_argument("--minutes", type=float, default=0.5, help="Nur für retell: Aufnahmezeit pro Runde in Minuten.")
+    f.add_argument("--q-seconds", type=int, default=15, help="Für q1/q2/q3: Aufnahmezeit pro Runde in Sekunden.")
+    f.add_argument("--minutes", type=float, default=0.5, help="Nur für retell: Aufnahmezeit pro Runde in Minuten (z. B. 0.5 = 30s).")
     f.add_argument("--device", type=int, default=None, help="Input-Device-ID (optional).")
    
     # news
@@ -341,6 +481,12 @@ def main():
         if args.mode == "q1":
             cmd_focus_q1(args)
             return
+        if args.mode == "q2":
+            cmd_focus_q2(args)
+            return
+        if args.mode == "q3":
+            cmd_focus_q3(args)
+            return
         if args.mode == "retell":
             cmd_focus_retell(args)
             return
@@ -360,8 +506,8 @@ def main():
             if args.csv:
                 write_csv(rows, args.csv)
 
-            print("Keine Sessions gefunden.")
-            print("Tipp: Erzeuge zuerst Sessions mit 'news' oder 'book', dann:")
+            print("Keine Einträge gefunden.")
+            print("Tipp: Erzeuge zuerst Einträge mit 'news' oder 'book', dann:")
             print("  python3 sprachapp_main.py report --last 20")
             return
 

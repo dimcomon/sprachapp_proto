@@ -158,7 +158,7 @@ def fetch_last_sessions(last: int = 20, mode: str | None = None) -> list[Row]:
 
 def print_table(rows: list[Row]) -> None:
     if not rows:
-        print("Keine Sessions gefunden.")
+        print("Keine Einträge gefunden.")
         return
 
     headers = ["id", "created_at", "mode", "topic", "wpm", "uniq", "target", "bonus", "q3ok"]
@@ -211,7 +211,7 @@ def write_csv(rows: list[Row], out_path: str) -> None:
 
 def print_summary(rows: list[Row]) -> None:
     if not rows:
-        print("Keine Sessions gefunden.")
+        print("Keine Einträge gefunden.")
         return
 
     groups = defaultdict(list)
@@ -222,7 +222,7 @@ def print_summary(rows: list[Row]) -> None:
         vals = [v for v in vals if v is not None]
         return None if not vals else mean(vals)
 
-    print("SUMMARY (Durchschnittswerte):")
+    print("ZUSAMMENFASSUNG (Durchschnittswerte):")
     for mode, items in sorted(groups.items()):
         wpm = avg([x.wpm for x in items])
         uniq = avg([x.unique_ratio for x in items])
@@ -257,7 +257,7 @@ def print_summary(rows: list[Row]) -> None:
         )
 def print_progress(rows: list[Row]) -> None:
     if not rows:
-        print("Keine Sessions gefunden.")
+        print("Keine Einträge gefunden.")
         return
 
     groups = defaultdict(list)
@@ -283,9 +283,12 @@ def print_progress(rows: list[Row]) -> None:
             return "-"
         return f"{x:.{d}f}"
 
-    print("PROGRESS (je Modus, Median für wpm/uniq):")
+    print("FORTSCHRITT (je Modus, Median für wpm/uniq):")
     best_reco = None
     best_prio = 999  # kleiner = wichtiger
+
+    best_focus = None
+    best_focus_prio = 999  # kleiner = wichtiger
     for mode, items in sorted(groups.items()):
         wpm = _median([x.wpm for x in items])
         uniq = _median([x.unique_ratio for x in items])
@@ -294,17 +297,21 @@ def print_progress(rows: list[Row]) -> None:
         extra = [f"lowq={f(lowq,2)}", f"empty={f(empty,2)}"]
         wc = _median([x.word_count for x in items])
 
+        # Diagnose (rein aus Quoten, keine neue Heuristik)
+        notes = []
         if mode == "q3":
             q3ok = rate_bool([x.q3ok for x in items], want=True)
             extra.append(f"q3ok={f(q3ok,2)}")
+
+            # Optionaler Tipp: wenn Ursache/Wirkung häufig fehlt (q3ok niedrig)
+            if q3ok is not None and q3ok <= 0.66:
+                notes.append("CHECK: Ursache/Wirkung fehlt oft")
 
         print(
             f"- {mode:6s} | n={len(items):3d} | wc={f(wc,0)} | wpm={f(wpm,1)} | uniq={f(uniq,3)} | "
             + " | ".join(extra)
         )
 
-        # Diagnose (rein aus Quoten, keine neue Heuristik)
-        notes = []
         if lowq is not None and lowq >= 0.34:
             notes.append("CHECK: häufige Qualitätsprobleme")
         if empty is not None and empty >= 0.34:
@@ -315,31 +322,65 @@ def print_progress(rows: list[Row]) -> None:
                 print(f"     TIPP: kürzer wiederholen; 1–2 klare Sätze, näher ans Mikro")
             if empty is not None and empty >= 0.34:
                 print(f"     TIPP: Eingabegerät, Pegel (Gain) und Umgebungsgeräusche prüfen")
-        
+            if mode == "q3" and "CHECK: Ursache/Wirkung fehlt oft" in notes:
+                print("     TIPP: Nutze 'weil/deshalb/daher' + klare Ursache→Wirkung in 1–2 Sätzen")
+
         # Empfehlung (B2.2): Kandidaten sammeln (global wird 1x gedruckt)
         reco = None
         prio = None
 
         if empty is not None and empty >= 0.34:
             prio = 1
-            reco = f"NEXT (global): Technik – Eingabegerät/Pegel prüfen, 1 Testaufnahme (selfcheck --smoke-asr)"
+            reco = f"NÄCHSTER SCHRITT: Technik – Eingabegerät/Pegel prüfen, 1 Testaufnahme (selfcheck --smoke-asr)"
 
         elif lowq is not None and lowq >= 0.34:
             prio = 2
-            reco = f"NEXT (global): Qualität – 3x sehr kurz (1–2 Sätze), näher ans Mikro, danach erneut q1/retell"
-
+            reco = "NÄCHSTER SCHRITT: Qualität – 3x sehr kurz (1–2 Sätze), näher ans Mikro, dann denselben Modus erneut üben."
         elif wc is not None and wc < 12:
             prio = 3
-            reco = f"NEXT (global): Länge – mindestens 2 Sätze / ~20 Wörter"
+            reco = f"NÄCHSTER SCHRITT: Länge – mindestens 2 Sätze / ca. 20 Wörter"
 
         elif uniq is not None and uniq < 0.55:
             prio = 4
-            reco = f"NEXT (global): Wortschatz – vermeide Wiederholung, nutze 2 Synonyme/Umformulierungen."
+            reco = f"NÄCHSTER SCHRITT: Wortschatz – vermeide Wiederholung, nutze 2 Synonyme/Umformulierungen."
 
         if reco and prio is not None and prio < best_prio:
             best_prio = prio
             best_reco = reco
+
+        # MVP3-D: Fokus-Empfehlung (ein Kandidat, 1 Zeile am Ende)
+        focus = None
+        focus_prio = None
+
+        # 1) Wenn empty häufig: retell (Technik/ASR stabilisieren)
+        if empty is not None and empty >= 0.34:
+            focus_prio = 1
+            focus = "EMPFOHLENER FOKUS: retell – Technik/ASR stabilisieren (kurz & deutlich sprechen)"
+
+        # 2) Wenn lowq häufig: denselben Modus üben (nicht raten, kein neues Mapping)
+        elif lowq is not None and lowq >= 0.34:
+            focus_prio = 2
+            focus = f"EMPFOHLENER FOKUS: {mode} – 3x sehr kurz (1–2 Sätze), näher ans Mikro"
+
+        # 3) Wenn q3ok niedrig: q3 üben
+        elif mode == "q3":
+            q3ok_here = rate_bool([x.q3ok for x in items], want=True)
+            if q3ok_here is not None and q3ok_here <= 0.66:
+                focus_prio = 3
+                focus = "EMPFOHLENER FOKUS: q3 – 2 Sätze mit weil/deshalb (Ursache→Wirkung)"
+
+        # 4) Wenn zu kurz: diesen Modus länger machen
+        elif wc is not None and wc < 20 and mode in ("q2", "q3"):
+            focus_prio = 4
+            focus = f"EMPFOHLENER FOKUS: {mode} – 2 Sätze, ca. 20–30 Wörter"
+
+        if focus and focus_prio is not None and focus_prio < best_focus_prio:
+            best_focus_prio = focus_prio
+            best_focus = focus
+
     if best_reco:
         print(best_reco)
+    if best_focus:
+        print(best_focus)
 
 

@@ -13,3 +13,15 @@ Ziel: Funktionale Erweiterungen auf stabiler MVP2-Basis (keine Änderungen an Qu
 - Sessions werden normal gespeichert, kein Eingriff in Chunk- oder Lernfortschritt
 - Auswertung anschließend über `report --progress`
 - `focus retell` für kurzes Retell-Training (z. B. 2 Runden à 0.5 min)
+
+## Status
+MVP3 abgeschlossen.
+
+Enthält:
+- Fortschrittsanalyse (Median/Quoten)
+- Diagnose + Tipps (deutsch)
+- Fokus-Modus (q1/q2/q3/retell)
+- Empfohlener Fokus (heuristikfrei)
+- Vollständig getestete Regressionen
+
+Selfcheck: OK
