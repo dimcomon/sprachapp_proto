@@ -80,10 +80,61 @@ def ask_questions_default(n: int = 3) -> list[str]:
     ]
     return base[:max(1, min(n, len(base)))]
 
+def _prompt_for(level: str, mode: str) -> str:
+    level = (level or "easy").strip().lower()
+    mode = (mode or "").strip().lower()
+
+    if mode == "retell":
+        if level == "easy":
+            return "RETELL (leicht): 2–3 Sätze. Was ist passiert?"
+        if level == "medium":
+            return "RETELL (mittel): 4–6 Sätze. Nenne 3 wichtige Punkte + 1 Detail."
+        return "RETELL (schwer): 4–6 Sätze. Struktur: Thema → 3 Punkte → Schluss/Fazit. (Max. 60 Sekunden)"
+    
+    if mode == "q1":
+        if level == "easy":
+            return "Q1 (leicht): 1 Satz. Deine These/Meinung."
+        if level == "medium":
+            return "Q1 (mittel): 2 Sätze. These + kurze Begründung (1× weil/denn)."
+        return "Q1 (schwer): 3 Sätze. These + 2 Argumente (klar getrennt)."
+
+    if mode == "q2":
+        if level == "easy":
+            return "Q2 (leicht): 2 Sätze. Nenne 2 Fakten/Aussagen aus dem Abschnitt."
+        if level == "medium":
+            return "Q2 (mittel): 3 Sätze. 2 Gründe + 1 Beispiel."
+        return "Q2 (schwer): 4 Sätze. 2 Fakten + Beispiel + kurzer Schluss."
+
+    if mode == "q3":
+        if level == "easy":
+            return "Q3 (leicht): 2 Sätze. Ursache→Wirkung mit weil/deshalb."
+        if level == "medium":
+            return "Q3 (mittel): 3 Sätze. Ursache→Wirkung + Folge."
+        return "Q3 (schwer): 2–3 Sätze. Ursache→Wirkung + Folge. (Genau 1× weil/deshalb/daher)"
+    return ""
+
+
+def _with_retell_hint(text: str, mode: str) -> str:
+    mode = (mode or "").strip().lower()
+    if mode == "retell":
+        return text + "\n→ Vermeide gleiche Formulierungen wie zuvor."
+    return text
+
+
+def _with_variation_hint(text: str, mode: str) -> str:
+    mode = (mode or "").strip().lower()
+    if mode in ("q1", "q2", "q3"):
+        return text + "\n→ Beginne nicht mit demselben Wort wie zuvor."
+    return text
+
 
 def _prep_phase(prep: str, prep_seconds: int):
     if prep == "enter":
-        input("\nVORBEREITUNG: Lies/denk in Ruhe. Drücke Enter, wenn du bereit bist für RETELL...")
+        try:
+            input("\nVORBEREITUNG: Lies/denk in Ruhe. Drücke Enter, wenn du bereit bist für RETELL...")
+        except KeyboardInterrupt:
+            print("\nAbgebrochen.")
+            raise SystemExit(0)        
     elif prep == "timed":
         import time
         print(f"\nVORBEREITUNG: {prep_seconds}s Lesen/Denken (keine Aufnahme).")
@@ -102,15 +153,17 @@ def run_news_session(
     next_: bool = False,
     repeat: bool = False,
     device: int | None = None,
-    minutes: float = 2.0,
+    minutes: float = 2.0,   # aktuell ungenutzt
+    q_seconds: int = 25,
     keep_last_audios: int = 10,
     keep_days: int = 0,
     cut_punkt: bool = False,
-    read_first: bool = False,  # aktuell ungenutzt, bleibt kompatibel
     questions: int = 3,
     prep: str = "enter",
     prep_seconds: int = 90,
-    q_seconds: int = 25,
+    level: str = "easy",
+    retell_seconds: int = 60,
+    read_first: bool = False,  # aktuell ungenutzt, bleibt kompatibel
 ):
     if not news_file.exists():
         raise SystemExit(f"Newsdatei nicht gefunden: {news_file.resolve()}")
@@ -133,8 +186,7 @@ def run_news_session(
 
     _prep_phase(prep=prep, prep_seconds=prep_seconds)
 
-    print("\nRETELL (frei):")
-    print("Gib den Abschnitt in eigenen Worten wieder (frei, zusammenhängend).")
+    print("\n" + _with_retell_hint(_prompt_for(level, "retell"), "retell"))
     print("Bonus (optional): Verwende 1–2 Bonus-Begriffe, wenn möglich.\n")
 
     bonus_terms = suggest_bonus_terms(chunk_text, None, k=5)
@@ -143,12 +195,15 @@ def run_news_session(
     print()
 
     print("\nMODE=retell: Gib den Abschnitt in eigenen Worten wieder.")
+    
+    retell_minutes = max(0.1, retell_seconds / 60.0)
+
     _record_and_transcribe(
         mode="retell",
         topic=topic_base,
         source_text=chunk_text,
         device=device,
-        minutes=minutes,
+        minutes=retell_minutes,
         keep_last_audios=keep_last_audios,
         keep_days=keep_days,
         cut_punkt=cut_punkt,
@@ -160,6 +215,8 @@ def run_news_session(
         print("\n" + "-" * 80)
         print(q)
         print("-" * 80)
+        mode = f"q{i}"
+        print(_with_variation_hint(_prompt_for(level, mode), mode))
 
         forced_bonus = None
         if "Begründung" in q:
@@ -202,7 +259,11 @@ def _record_and_transcribe(
     ts = datetime.now(UTC).strftime("%Y-%m-%dT%H-%M-%S")
     out = Path("data/audio") / f"{ts}_{topic.replace(':', '-')}_{mode}.wav"
 
-    record_mic_to_wav(out_path=out, minutes=minutes, device=device)
+    try:
+        record_mic_to_wav(out_path=out, minutes=minutes, device=device)
+    except KeyboardInterrupt:
+        print("\nAbgebrochen.")
+        raise SystemExit(0)
 
     raw = transcribe_with_whisper(str(out))
     transcript = cut_at_punkt(raw) if cut_punkt else normalize_text(raw)

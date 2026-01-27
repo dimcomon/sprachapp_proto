@@ -404,9 +404,9 @@ def build_parser() -> argparse.ArgumentParser:
     b.add_argument("--next", action="store_true", help="Zum nächsten Chunk.")
     b.add_argument("--repeat", action="store_true", help="Aktuellen Chunk wiederholen.")
     b.add_argument("--read-first", action="store_true", help="Erst vorlesen (Warm-up), dann retell.")
-    b.add_argument("--questions", type=int, default=2, help="Anzahl Standardfragen (1-3).")
+    b.add_argument("--questions", type=int, default=3, help="Anzahl Standardfragen (1-3).")
     b.add_argument("--q-seconds", type=int, default=25,help="Aufnahmezeit pro Frage in Sekunden (kurz halten).")
-
+    b.add_argument("--retell-seconds", type=int, default=60, help="Aufnahmezeit für RETELL in Sekunden.")
     # NEU: Vorbereitung
     b.add_argument("--prep", choices=["enter", "timed", "none"], default="enter",
                    help="Vorbereitung vor retell: enter=unbegrenzt, timed=mit --prep-seconds, none=sofort.")
@@ -416,6 +416,7 @@ def build_parser() -> argparse.ArgumentParser:
     b.add_argument("--minutes", type=float, default=2.0, help="Maximale Aufnahmezeit für read/retell.")
     b.add_argument("--cut-punkt", action="store_true", help="Schneidet Transkript bis letztes 'punkt'.")
     b.add_argument("--keep-last-audios", type=int, default=10, help="Behält nur die letzten N WAVs.")
+    b.add_argument("--level", choices=["easy", "medium", "hard"], default="easy", help="Schwierigkeitsstufe: easy (kurz), medium (ausführlicher), hard (strukturiert).")
 
     # stats / report (Report)
     stats_p = sub.add_parser("stats", help="Zeigt die letzten Einträge (Tabelle) und optional CSV-Export.")
@@ -449,12 +450,14 @@ def build_parser() -> argparse.ArgumentParser:
     n.add_argument("--minutes", type=float, default=2.0, help="Maximale Aufnahmezeit für retell.")
     n.add_argument("--questions", type=int, default=3, help="Anzahl Fragen (1-3).")
     n.add_argument("--q-seconds", type=int, default=25, help="Aufnahmezeit pro Frage in Sekunden.")
+    n.add_argument("--retell-seconds", type=int, default=60, help="Aufnahmezeit für RETELL in Sekunden.")
     n.add_argument("--prep", choices=["enter", "timed", "none"], default="enter",
                    help="Vorbereitung vor retell: enter=unbegrenzt, timed=mit --prep-seconds, none=sofort.")
     n.add_argument("--prep-seconds", type=int, default=90, help="Nur relevant bei --prep timed.")
     n.add_argument("--cut-punkt", action="store_true", help="Schneidet Transkript bis letztes 'punkt'.")
     n.add_argument("--keep-last-audios", type=int, default=10, help="Behält nur die letzten N WAVs.")
     n.add_argument("--keep-days", type=int, default=0, help="Löscht WAVs älter als X Tage (0=aus).")
+    n.add_argument("--level", choices=["easy", "medium", "hard"], default="easy", help="Schwierigkeitsstufe: easy (kurz), medium (ausführlicher), hard (strukturiert).")
 
     # selfcheck
     c = sub.add_parser("selfcheck", help="Technischer Systemcheck (Imports/DB/Filesystem/Report).")
@@ -538,6 +541,8 @@ def main():
             prep=args.prep,
             prep_seconds=args.prep_seconds,
             q_seconds=args.q_seconds,
+            level=args.level,
+            retell_seconds=args.retell_seconds,
         )
         return
     
@@ -557,6 +562,8 @@ def main():
             questions=args.questions,
             prep=args.prep,
             prep_seconds=args.prep_seconds,
+            level=args.level,
+            retell_seconds=args.retell_seconds,
         )
         return
 

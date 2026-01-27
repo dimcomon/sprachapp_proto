@@ -81,9 +81,21 @@ def ask_questions_default(n: int = 3) -> list[str]:
     return base[:max(1, min(n, len(base)))]
 
 
+def _with_retell_hint(text: str) -> str:
+    return text + "\n→ Vermeide gleiche Formulierungen wie zuvor."
+
+
+def _with_variation_hint(text: str) -> str:
+    return text + "\n→ Beginne nicht mit demselben Wort wie zuvor."
+
+
 def _prep_phase(prep: str, prep_seconds: int):
     if prep == "enter":
-        input("\nVORBEREITUNG: Lies/denk in Ruhe. Drücke Enter, wenn du bereit bist für RETELL...")
+        try:
+            input("\nVORBEREITUNG: Lies/denk in Ruhe. Drücke Enter, wenn du bereit bist für RETELL...")
+        except KeyboardInterrupt:
+            print("\nAbgebrochen.")
+            raise SystemExit(0)            
     elif prep == "timed":
         import time
         print(f"\nVORBEREITUNG: {prep_seconds}s Lesen/Denken (keine Aufnahme).")
@@ -111,6 +123,8 @@ def run_book_session(
     prep: str = "enter",
     prep_seconds: int = 90,
     q_seconds: int = 25,
+    level: str = "easy",
+    retell_seconds: int = 60,
 ):
     if not book_file.exists():
         raise SystemExit(f"Buchdatei nicht gefunden: {book_file.resolve()}")
@@ -138,17 +152,15 @@ def run_book_session(
             topic=topic_base,
             source_text=chunk_text,
             device=device,
-            minutes=minutes,
+            minutes=max(0.2, q_seconds / 60.0),
             keep_last_audios=keep_last_audios,
             keep_days=keep_days,
             cut_punkt=cut_punkt,
-            forced_bonus_terms=None,
         )
 
     _prep_phase(prep=prep, prep_seconds=prep_seconds)
 
-    print("\nRETELL (frei):")
-    print("Gib den Abschnitt in eigenen Worten wieder (frei, zusammenhängend).")
+    print("\n" + _with_retell_hint("RETELL: 2–6 Sätze. Gib den Abschnitt in eigenen Worten wieder."))
     print("Bonus (optional): Verwende 1–2 Bonus-Begriffe, wenn möglich.\n")
 
     bonus_terms = suggest_bonus_terms(chunk_text, None, k=5)
@@ -157,12 +169,15 @@ def run_book_session(
     print()
 
     print("\nMODE=retell: Gib den Abschnitt in eigenen Worten wieder.")
+    
+    retell_minutes = max(0.1, retell_seconds / 60.0)
+    
     retell_audio, _, _ = _record_and_transcribe(
         mode="retell",
         topic=topic_base,
         source_text=chunk_text,
         device=device,
-        minutes=minutes,
+        minutes=retell_minutes,
         keep_last_audios=keep_last_audios,
         keep_days=keep_days,
         cut_punkt=cut_punkt,
@@ -174,6 +189,7 @@ def run_book_session(
     for i, q in enumerate(qs, start=1):
         print("\n" + "-" * 80)
         print(q)
+        print(_with_variation_hint(""))
         print("-" * 80)
 
         forced_bonus = None
@@ -217,7 +233,11 @@ def _record_and_transcribe(
     ts = datetime.now(UTC).strftime("%Y-%m-%dT%H-%M-%S")
     out = Path("data/audio") / f"{ts}_{topic.replace(':', '-')}_{mode}.wav"
 
-    record_mic_to_wav(out_path=out, minutes=minutes, device=device)
+    try:
+        record_mic_to_wav(out_path=out, minutes=minutes, device=device)
+    except KeyboardInterrupt:
+        print("\nAbgebrochen.")
+        raise SystemExit(0)
 
     raw = transcribe_with_whisper(str(out))
     transcript = cut_at_punkt(raw) if cut_punkt else normalize_text(raw)
