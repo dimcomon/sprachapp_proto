@@ -1,9 +1,9 @@
 # SprachApp Proto
 
 ## Status
-- Aktueller Stand: MVP3 (Weiterentwicklung)
-- Stabiler Stand: MVP2 (Tag v0.2.0, abgeschlossen)
-- Regel: Keine Änderungen an MVP2-Qualitätslogik
+- Aktueller Stand: MVP4-B (Didaktik abgeschlossen)
+- Letzter stabiler Tag: v0.4.0-b
+- Regel: Keine Änderungen an zentraler Qualitätslogik (seit MVP2)
 
 ## Zweck
 CLI-basierte Sprachlern-App mit lokalem ASR (openai-whisper) zur Aufnahme,
@@ -14,6 +14,7 @@ python3 sprachapp_main.py news
 python3 sprachapp_main.py book
 python3 sprachapp_main.py selfcheck
 python3 sprachapp_main.py report --last 20   # Alias: stats
+Siehe RUN.md für vollständige Beispiele und Optionen.
 
 ## Workflow (empfohlen)
 
