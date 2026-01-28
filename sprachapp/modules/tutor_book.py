@@ -92,7 +92,7 @@ def _with_variation_hint(text: str) -> str:
 def _prep_phase(prep: str, prep_seconds: int):
     if prep == "enter":
         try:
-            input("\nVORBEREITUNG: Lies/denk in Ruhe. Drücke Enter, wenn du bereit bist für RETELL...")
+            input("\nVORBEREITUNG: Lies/denk in Ruhe. Drücke Enter, wenn du bereit bist für Wiedergabe...")
         except KeyboardInterrupt:
             print("\nAbgebrochen.")
             raise SystemExit(0)            
@@ -104,7 +104,7 @@ def _prep_phase(prep: str, prep_seconds: int):
             time.sleep(1)
         print("\nVorbereitung beendet.")
     elif prep == "none":
-        print("\nVORBEREITUNG übersprungen (sofort RETELL).")
+        print("\nVORBEREITUNG übersprungen (sofort Wiedergabe).")
 
 
 def run_book_session(
@@ -160,15 +160,15 @@ def run_book_session(
 
     _prep_phase(prep=prep, prep_seconds=prep_seconds)
 
-    print("\n" + _with_retell_hint("RETELL: 2–6 Sätze. Gib den Abschnitt in eigenen Worten wieder."))
+    print("\n" + _with_retell_hint("Wiedergabe: 2–6 Sätze. Gib den Abschnitt in eigenen Worten wieder."))
     print("Bonus (optional): Verwende 1–2 Bonus-Begriffe, wenn möglich.\n")
 
     bonus_terms = suggest_bonus_terms(chunk_text, None, k=5)
-    print("BONUS-Begriffe (optional im RETELL – verwende 1–2, wenn möglich):")
+    print("BONUS-Begriffe (optional für Wiedergabe – verwende 1–2, wenn möglich):")
     print(", ".join(bonus_terms) if bonus_terms else "(keine)")
     print()
 
-    print("\nMODE=retell: Gib den Abschnitt in eigenen Worten wieder.")
+    print("\nMODE=Wiedergabe: Gib den Abschnitt in eigenen Worten wieder.")
     
     retell_minutes = max(0.1, retell_seconds / 60.0)
     

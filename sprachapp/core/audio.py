@@ -72,7 +72,7 @@ def record_mic_to_wav(
     seconds = max(1.0, minutes * 60.0)
     frames = int(sample_rate * seconds)
 
-    print(f"Recording (blocking)... {seconds:.0f}s @ {sample_rate} Hz, device={device}")
+    print(f"Aufnahme (blockierend)... {seconds:.0f}s @ {sample_rate} Hz, device={device}")
     audio = sd.rec(frames, samplerate=sample_rate, channels=channels, dtype="float32", device=device)
     sd.wait()
 

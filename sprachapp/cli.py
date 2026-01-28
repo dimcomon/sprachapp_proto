@@ -14,6 +14,7 @@ from sprachapp.modules.report import fetch_last_sessions, print_table, write_csv
 from sprachapp.modules.selfcheck import run_selfcheck
 from sprachapp.modules.tutor_news import run_news_session
 from sprachapp.modules._tutor_common import compute_quality_flags, print_quality_warnings
+from sprachapp.modules.tutor_define import run_define_session
 
 
 def cmd_speak(args: argparse.Namespace) -> None:
@@ -114,7 +115,7 @@ def cmd_focus_q1(args: argparse.Namespace) -> None:
     q_seconds = float(args.q_seconds)
     minutes = max(0.01, q_seconds / 60.0)
 
-    print(f"FOCUS q1: {rounds} Runden á {int(q_seconds)}s")
+    print(f"FOKUS q1: {rounds} Runden á {int(q_seconds)}s")
     print("Aufgabe: Antworte als Q1 (These). Genau 1 Satz, ohne Wiederholung.\n")
 
     for i in range(1, rounds + 1):
@@ -183,7 +184,7 @@ def cmd_focus_q2(args: argparse.Namespace) -> None:
     q_seconds = float(args.q_seconds)
     minutes = max(0.01, q_seconds / 60.0)
 
-    print(f"FOCUS q2: {rounds} Runden á {int(q_seconds)}s")
+    print(f"FOKUS q2: {rounds} Runden á {int(q_seconds)}s")
     print("Aufgabe: Antworte als Q2 (Begründung). 1–2 Sätze, mit weil/denn.\n")
     for i in range(1, rounds + 1):
         ts = datetime.now(UTC).strftime("%Y-%m-%dT%H-%M-%S")
@@ -252,7 +253,7 @@ def cmd_focus_q3(args: argparse.Namespace) -> None:
     q_seconds = float(args.q_seconds)
     minutes = max(0.01, q_seconds / 60.0)
 
-    print(f"FOCUS q3: {rounds} Runden á {int(q_seconds)}s")
+    print(f"FOKUS q3: {rounds} Runden á {int(q_seconds)}s")
     print("Aufgabe: Antworte als Q3 (Begründung mit Ursache/Wirkung). 1–2 Sätze, mit weil/deshalb.\n")
     for i in range(1, rounds + 1):
         ts = datetime.now(UTC).strftime("%Y-%m-%dT%H-%M-%S")
@@ -322,8 +323,8 @@ def cmd_focus_retell(args: argparse.Namespace) -> None:
     rounds = int(args.rounds)
     minutes = float(args.minutes)
 
-    print(f"FOCUS retell: {rounds} Runden á {minutes:.2f} min")
-    print("Aufgabe: Kurzes Retell. 2–4 Sätze, ohne Wiederholung.\n")
+    print(f"FOKUS Wiedergabe: {rounds} Runden á {minutes:.2f} min")
+    print("Aufgabe: Kurze Wiedergabe. 2–4 Sätze, ohne Wiederholung.\n")
 
     for i in range(1, rounds + 1):
         ts = datetime.now(UTC).strftime("%Y-%m-%dT%H-%M-%S")
@@ -380,7 +381,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub = p.add_subparsers(dest="cmd", required=True)
 
     # speak
-    s = sub.add_parser("speak", help="Aufnehmen/Transkribieren/Auswertung (read|retell)")
+    s = sub.add_parser("speak", help="Aufnehmen/Transkribieren/Auswertung (lesen|Wiedergabe)")
     s.add_argument("--list-devices", action="store_true", help="Zeigt verfügbare Input-Geräte an.")
     s.add_argument("--audio", default=None, help="Pfad zur Audio-Datei (wav/mp3/m4a).")
     s.add_argument("--record", action="store_true", help="Nimmt Audio vom Mikrofon auf und speichert es als WAV.")
@@ -397,23 +398,22 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--suggest-k", type=int, default=8, help="Anzahl Zielbegriffe.")
 
     # book
-    b = sub.add_parser("book", help="Buch/TXT Tutor (Chunk -> retell -> Fragen)")
+    b = sub.add_parser("book", help="Buch/TXT Tutor (Chunk -> Wiedergabe -> Fragen)")
     b.add_argument("--book-file", required=True, help="TXT-Datei (Buch/Kapitel).")
     b.add_argument("--words-per-chunk", type=int, default=220, help="Wörter pro Abschnitt.")
     b.add_argument("--chunk", type=int, default=None, help="Expliziter Chunk-Index (0-basiert).")
     b.add_argument("--next", action="store_true", help="Zum nächsten Chunk.")
     b.add_argument("--repeat", action="store_true", help="Aktuellen Chunk wiederholen.")
-    b.add_argument("--read-first", action="store_true", help="Erst vorlesen (Warm-up), dann retell.")
+    b.add_argument("--read-first", action="store_true", help="Erst vorlesen (Aufwärmen), dann Wiedergabe.")
     b.add_argument("--questions", type=int, default=3, help="Anzahl Standardfragen (1-3).")
     b.add_argument("--q-seconds", type=int, default=25,help="Aufnahmezeit pro Frage in Sekunden (kurz halten).")
-    b.add_argument("--retell-seconds", type=int, default=60, help="Aufnahmezeit für RETELL in Sekunden.")
-    # NEU: Vorbereitung
+    b.add_argument("--retell-seconds", type=int, default=60, help="Aufnahmezeit für Wiedergabe in Sekunden.")
     b.add_argument("--prep", choices=["enter", "timed", "none"], default="enter",
-                   help="Vorbereitung vor retell: enter=unbegrenzt, timed=mit --prep-seconds, none=sofort.")
+                   help="Vorbereitung vor Wiedergabe: enter=unbegrenzt, timed=mit --prep-seconds, none=sofort.")
     b.add_argument("--prep-seconds", type=int, default=90,
                    help="Nur relevant bei --prep timed.")
     b.add_argument("--device", type=int, default=None, help="Input-Device-ID (optional).")
-    b.add_argument("--minutes", type=float, default=2.0, help="Maximale Aufnahmezeit für read/retell.")
+    b.add_argument("--minutes", type=float, default=2.0, help="Maximale Aufnahmezeit für lesen/Wiedergabe.")
     b.add_argument("--cut-punkt", action="store_true", help="Schneidet Transkript bis letztes 'punkt'.")
     b.add_argument("--keep-last-audios", type=int, default=10, help="Behält nur die letzten N WAVs.")
     b.add_argument("--level", choices=["easy", "medium", "hard"], default="easy", help="Schwierigkeitsstufe: easy (kurz), medium (ausführlicher), hard (strukturiert).")
@@ -424,7 +424,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     for r in (stats_p, report_p):
         r.add_argument("--last", type=int, default=20, help="Anzahl letzter Einträge.")
-        r.add_argument("--mode", default=None, help="Filter: retell, q1, q2, q3, read ...")
+        r.add_argument("--mode", default=None, help="Filter: Wiedergabe, q1, q2, q3, lesen ...")
         r.add_argument("--csv", default=None, help="Optional: CSV-Datei schreiben, z.B. out.csv")
         r.add_argument("--summary", action="store_true", help="Zeigt Durchschnittswerte (Trend) statt Tabelle.")
         r.add_argument("--progress", action="store_true", help="Fortschritt je Modus (Median: wc/wpm/uniq, Quoten: lowq/empty).")
@@ -432,32 +432,49 @@ def build_parser() -> argparse.ArgumentParser:
         r.add_argument("--only-empty", action="store_true", help="Zeigt nur Einträge mit asr_empty=True.")    
     
     # focus (minimal: q1/q2/q3/retell)
-    f = sub.add_parser("focus", help="Fokus-Run: gezieltes Üben eines Modus (q1/q2/q3/retell).")
-    f.add_argument("mode", choices=["q1", "q2", "q3", "retell"], help="Fokus-Modus (q1=These, q2=Begründung, q3=Ursache/Wirkung, retell=Zusammenfassung).")
+    f = sub.add_parser("focus", help="Fokus-Run: gezieltes Üben eines Modus (q1/q2/q3/Wiedergabe).")
+    f.add_argument("mode", choices=["q1", "q2", "q3", "retell"], help="Fokus-Modus (q1=These, q2=Begründung, q3=Ursache/Wirkung, Wiedergabe=Zusammenfassung).")
     f.add_argument("--rounds", type=int, default=3, help="Anzahl Wiederholungen.")
     f.add_argument("--q-seconds", type=int, default=15, help="Für q1/q2/q3: Aufnahmezeit pro Runde in Sekunden.")
-    f.add_argument("--minutes", type=float, default=0.5, help="Nur für retell: Aufnahmezeit pro Runde in Minuten (z. B. 0.5 = 30s).")
+    f.add_argument("--minutes", type=float, default=0.5, help="Nur für Wiedergabe: Aufnahmezeit pro Runde in Minuten (z. B. 0.5 = 30s).")
     f.add_argument("--device", type=int, default=None, help="Input-Device-ID (optional).")
    
     # news
-    n = sub.add_parser("news", help="News/TXT Tutor (Chunk -> retell -> Fragen)")
+    n = sub.add_parser("news", help="News/TXT Tutor (Chunk -> Wiedergabe -> Fragen)")
     n.add_argument("--news-file", required=True, help="TXT-Datei mit News/Inhalt.")
     n.add_argument("--words-per-chunk", type=int, default=220, help="Wörter pro Abschnitt.")
     n.add_argument("--chunk", type=int, default=None, help="Expliziter Chunk-Index (0-basiert).")
     n.add_argument("--next", action="store_true", help="Zum nächsten Chunk.")
     n.add_argument("--repeat", action="store_true", help="Aktuellen Chunk wiederholen.")
     n.add_argument("--device", type=int, default=None, help="Input-Device-ID (optional).")
-    n.add_argument("--minutes", type=float, default=2.0, help="Maximale Aufnahmezeit für retell.")
+    n.add_argument("--minutes", type=float, default=2.0, help="Maximale Aufnahmezeit für Wiedergabe.")
     n.add_argument("--questions", type=int, default=3, help="Anzahl Fragen (1-3).")
     n.add_argument("--q-seconds", type=int, default=25, help="Aufnahmezeit pro Frage in Sekunden.")
-    n.add_argument("--retell-seconds", type=int, default=60, help="Aufnahmezeit für RETELL in Sekunden.")
+    n.add_argument("--retell-seconds", type=int, default=60, help="Aufnahmezeit für Wiedergabe in Sekunden.")
     n.add_argument("--prep", choices=["enter", "timed", "none"], default="enter",
-                   help="Vorbereitung vor retell: enter=unbegrenzt, timed=mit --prep-seconds, none=sofort.")
+                   help="Vorbereitung vor Wiedergabe: enter=unbegrenzt, timed=mit --prep-seconds, none=sofort.")
     n.add_argument("--prep-seconds", type=int, default=90, help="Nur relevant bei --prep timed.")
     n.add_argument("--cut-punkt", action="store_true", help="Schneidet Transkript bis letztes 'punkt'.")
     n.add_argument("--keep-last-audios", type=int, default=10, help="Behält nur die letzten N WAVs.")
     n.add_argument("--keep-days", type=int, default=0, help="Löscht WAVs älter als X Tage (0=aus).")
     n.add_argument("--level", choices=["easy", "medium", "hard"], default="easy", help="Schwierigkeitsstufe: easy (kurz), medium (ausführlicher), hard (strukturiert).")
+
+    # define "wiki"
+    d = sub.add_parser("define", help="Begriff erklären (Text) und dann Wiedergabe/Q1–Q3 üben.")
+    d.add_argument("--term", required=True, help="Begriff, z.B. 'Endoskop'.")
+    d.add_argument("--text", default=None, help="Erklärungstext (kurz). Wenn leer, nutze --auto.")
+    d.add_argument("--auto", action="store_true", help="Erklärungstext aus data/define_terms.json laden.")
+    d.add_argument("--level", choices=["easy", "medium", "hard"], default="easy", help="Schwierigkeitsstufe.")
+    d.add_argument("--retell-seconds", type=int, default=60, help="Aufnahmezeit für Wiedergabe in Sekunden.")
+    d.add_argument("--q-seconds", type=int, default=25, help="Aufnahmezeit pro Frage in Sekunden.")
+    d.add_argument("--questions", type=int, default=3, help="Anzahl Fragen (1-3).")
+    d.add_argument("--prep", choices=["enter", "timed", "none"], default="enter",
+                   help="Vorbereitung vor Wiedergabe: enter=unbegrenzt, timed=mit --prep-seconds, none=sofort.")
+    d.add_argument("--prep-seconds", type=int, default=90, help="Nur relevant bei --prep timed.")
+    d.add_argument("--device", type=int, default=None, help="Input-Device-ID (optional).")
+    d.add_argument("--cut-punkt", action="store_true", help="Schneidet Transkript bis letztes 'punkt'.")
+    d.add_argument("--keep-last-audios", type=int, default=10, help="Behält nur die letzten N WAVs.")
+    d.add_argument("--keep-days", type=int, default=0, help="Löscht WAVs älter als X Tage (0=aus).")
 
     # selfcheck
     c = sub.add_parser("selfcheck", help="Technischer Systemcheck (Imports/DB/Filesystem/Report).")
@@ -493,7 +510,7 @@ def main():
         if args.mode == "retell":
             cmd_focus_retell(args)
             return
-        raise SystemExit(f"Unsupported focus mode: {args.mode}")
+        raise SystemExit(f"Nicht unterstützter Fokus-Modus: {args.mode}")
 
     if args.cmd in ("stats", "report"):
         rows = fetch_last_sessions(last=args.last, mode=args.mode)
@@ -564,6 +581,24 @@ def main():
             prep_seconds=args.prep_seconds,
             level=args.level,
             retell_seconds=args.retell_seconds,
+        )
+        return
+
+    if args.cmd == "define":
+        run_define_session(
+            term=args.term,
+            text=args.text,
+            auto=args.auto,
+            level=args.level,
+            device=args.device,
+            retell_seconds=args.retell_seconds,
+            q_seconds=args.q_seconds,
+            questions=args.questions,
+            prep=args.prep,
+            prep_seconds=args.prep_seconds,
+            cut_punkt=args.cut_punkt,
+            keep_last_audios=args.keep_last_audios,
+            keep_days=args.keep_days,
         )
         return
 

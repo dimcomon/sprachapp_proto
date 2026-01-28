@@ -86,10 +86,10 @@ def _prompt_for(level: str, mode: str) -> str:
 
     if mode == "retell":
         if level == "easy":
-            return "RETELL (leicht): 2–3 Sätze. Was ist passiert?"
+            return "Wiedergabe (leicht): 2–3 Sätze. Was ist passiert?"
         if level == "medium":
-            return "RETELL (mittel): 4–6 Sätze. Nenne 3 wichtige Punkte + 1 Detail."
-        return "RETELL (schwer): 4–6 Sätze. Struktur: Thema → 3 Punkte → Schluss/Fazit. (Max. 60 Sekunden)"
+            return "Wiedergabe (mittel): 4–6 Sätze. Nenne 3 wichtige Punkte + 1 Detail."
+        return "Wiedergabe (schwer): 4–6 Sätze. Struktur: Thema → 3 Punkte → Schluss/Fazit. (Max. 60 Sekunden)"
     
     if mode == "q1":
         if level == "easy":
@@ -131,7 +131,7 @@ def _with_variation_hint(text: str, mode: str) -> str:
 def _prep_phase(prep: str, prep_seconds: int):
     if prep == "enter":
         try:
-            input("\nVORBEREITUNG: Lies/denk in Ruhe. Drücke Enter, wenn du bereit bist für RETELL...")
+            input("\nVORBEREITUNG: Lies/denk in Ruhe. Drücke Enter, wenn du bereit bist für Wiedergabe...")
         except KeyboardInterrupt:
             print("\nAbgebrochen.")
             raise SystemExit(0)        
@@ -143,7 +143,7 @@ def _prep_phase(prep: str, prep_seconds: int):
             time.sleep(1)
         print("\nVorbereitung beendet.")
     elif prep == "none":
-        print("\nVORBEREITUNG übersprungen (sofort RETELL).")
+        print("\nVORBEREITUNG übersprungen (sofort Wiedergabe).")
 
 
 def run_news_session(
@@ -190,11 +190,11 @@ def run_news_session(
     print("Bonus (optional): Verwende 1–2 Bonus-Begriffe, wenn möglich.\n")
 
     bonus_terms = suggest_bonus_terms(chunk_text, None, k=5)
-    print("BONUS-Begriffe (optional im RETELL – verwende 1–2, wenn möglich):")
+    print("BONUS-Begriffe (optional bei Wiedergabe – verwende 1–2, wenn möglich):")
     print(", ".join(bonus_terms) if bonus_terms else "(keine)")
     print()
 
-    print("\nMODE=retell: Gib den Abschnitt in eigenen Worten wieder.")
+    print("\nMODE=Wiedergabe: Gib den Abschnitt in eigenen Worten wieder.")
     
     retell_minutes = max(0.1, retell_seconds / 60.0)
 
