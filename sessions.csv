@@ -1,5 +1,0 @@
-id,created_at,topic,mode,wpm,unique_ratio,target_rate,bonus_rate
-4,,book:book.txt:chunk:1,q3,60.0,0.6000,0.0000,0.4000
-3,,book:book.txt:chunk:1,q2,36.0,0.8333,,
-2,,book:book.txt:chunk:1,q1,9.0,1.0000,,
-1,,book:book.txt:chunk:1,retell,62.5,0.6000,0.0000,0.6000

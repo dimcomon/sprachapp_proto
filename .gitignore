@@ -36,3 +36,9 @@ github_pat_*
 *.key
 *.p12
 *.zip
+
+# Ignore all runtime data
+data/**
+
+# But keep define terms file for --auto
+!data/define_terms.json
