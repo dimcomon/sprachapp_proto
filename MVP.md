@@ -1,54 +1,108 @@
-# SprachApp – MVP-Übersicht
+# SprachApp – MVP-Übersicht (Source of Truth)
 
-## MVP1 – Basis
+Diese Datei ist die verbindliche Übersicht über den Entwicklungsstand
+und die geplanten Schritte bis zur fertigen App.
+
+---
+
+## MVP1 – Basis (abgeschlossen)
 - CLI-Grundstruktur
-- Audioaufnahme + ASR (Whisper)
-- Wiedergabe (Retell) / einfache Fragen
-Status: abgeschlossen
-
-## MVP2 – Tutor-Flows
-- News- und Book-Tutor
-- Chunking
-- Q1–Q3
+- Audioaufnahme + ASR (Whisper lokal)
+- Transkript + Basis-Statistiken
+- Retell / einfache Fragen
 - Speicherung von Sessions
-Status: abgeschlossen
 
-## MVP3 – Analyse & Qualität
+Status: ✅ abgeschlossen
+
+---
+
+## MVP2 – Tutor-Flows (abgeschlossen)
+- News- und Book-Tutor
+- Chunking von Texten
+- Retell + Q1–Q3
+- Persistente Sessions
+- Wiederholungs- und Next-Logik
+
+Status: ✅ abgeschlossen
+
+---
+
+## MVP3 – Analyse & Qualität (abgeschlossen)
 - Zentrale Qualitätslogik (Flags, low_quality)
 - Einheitliche Warn- und Debug-Ausgabe
-- Report / Stats / Progress-Ansicht
+- Report / Stats / Progress
 - Filter (low_quality, empty)
-Status: abgeschlossen
+- CSV-Export
 
-## MVP4 – Didaktik & Lernsteuerung
+Status: ✅ abgeschlossen
+
+---
+
+## MVP4 – Didaktik & Lernsteuerung (abgeschlossen, eingefroren)
+- Einheitliche Q1–Q3-Didaktik
 - Schwierigkeitsstufen (easy / medium / hard)
-- Themen-Varianz (Perspektive, Fokus)
-- Sprachliche Variation (Umformulieren, Synonyme)
-- Manueller Fokus-Modus
-- Define-Tutor (Begriff erklären → Wiedergabe → Q1–Q3)
-Status: abgeschlossen (eingefroren)
+- Sprachliche Variation (Prompts)
+- Vorbereitung (prep: enter / timed / none)
+- Fokus-Modus (focus qX)
+- Define-Tutor (Begriff → Retell → Q1–Q3)
+- Konsolidierter Coach-Output
+- Verkürzte Defaults, steuerbar per CLI
+- Code-Hygiene, Freeze, Tag
 
-## MVP5-A – Coach (Stub)
-- Erste Coaching-Ebene über bestehende Sessions
+Status: ✅ abgeschlossen (eingefroren)
+
+---
+
+## MVP5 – Coach & Feedback (abgeschlossen)
+- Zentrale Coach-Ausgabe
 - Coach liest:
-  - Modus (Wiedergabe, Q1–Q3)
+  - Modus (retell, q1–q3)
   - Transkript
   - vorhandene Stats / Flags
 - Ausgabe:
-  - Nur Text (CLI)
+  - Textbasiert (CLI)
   - Keine neue Qualitätslogik
   - Kein neues DB-Schema
-- Integration in:
-  - define
+- Einheitlich integriert in:
   - news
   - book
-- Vorbereitung für:
-  - spätere KI-/LLM-Anbindung
-  - App-Frontend (iOS)
-Status: in Arbeit
+  - define
+- Basis für spätere KI-/Backend-Anbindung
 
-## Coach (MVP5-A)
+Status: ✅ abgeschlossen
 
-### Define mit Coach
-```bash
-python3 sprachapp_main.py define --term "endoskop"
+---
+
+## MVP6 – Backend-Trennung (geplant)
+Ziel: App-fähige Architektur vorbereiten.
+
+- Backend-Interface für Coach
+- Austauschbare Implementierungen:
+  - OpenAI
+  - Mock / lokal
+- Feature-Flag (Backend-Auswahl)
+- Tutor-Code kennt kein OpenAI mehr direkt
+
+Status: ⏳ geplant
+
+---
+
+## MVP7 – Server & API (geplant)
+- Client/Server-Trennung
+- REST / WebSocket API
+- Audio-Upload / Streaming
+- Session-Handling serverseitig
+- Nutzerkontext / Auth-Grundlage
+
+Status: ⏳ geplant
+
+---
+
+## MVP8 – iOS App (geplant)
+- SwiftUI App
+- Voice UX (Start/Stop/Prep)
+- Anzeige von Coach-Feedback
+- Fortschritt & Verlauf
+- Onboarding
+
+Status: ⏳ geplant
