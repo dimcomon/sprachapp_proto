@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from typing import Any
-
+import os
+from sprachapp.core.coach_llm import run_llm_coach
 
 @dataclass
 class CoachInput:
@@ -20,13 +21,34 @@ class CoachOutput:
 
 def generate_coach_feedback(inp: CoachInput) -> CoachOutput:
     """
-    MVP5-A Stub: Noch keine KI.
-    Nutzt nur vorhandene Daten (mode/topic/transcript/stats_payload) für einfache Hinweise.
+    Coach: bevorzugt LLM (wenn aktiviert), sonst Stub-Fallback.
     Keine neue Qualitätslogik, keine DB-Änderungen.
     """
+
+    # LLM nur wenn explizit aktiviert (damit es nicht "aus Versehen" Kosten macht)
+    # Aktivieren: export COACH_USE_LLM=1
+    use_llm = os.getenv("COACH_USE_LLM", "0").strip() == "1"
+
+    if use_llm:
+        try:
+            llm = run_llm_coach(
+                mode=inp.mode,
+                source_text=inp.source_text,
+                transcript=inp.transcript,
+            )
+            # Wenn LLM sauber antwortet, nutzen wir es direkt.
+            return CoachOutput(feedback_text=llm.feedback_text)
+        except Exception:
+            # Fallback ohne Drama
+            pass
+
+    # ---- Stub-Fallback (dein bisheriger Code) ----
     flags = {}
     if isinstance(inp.stats_payload, dict):
-        flags = {k: inp.stats_payload.get(k) for k in ("asr_empty", "too_short", "suspected_silence", "hallucination_hit", "low_quality")}
+        flags = {
+            k: inp.stats_payload.get(k)
+            for k in ("asr_empty", "too_short", "suspected_silence", "hallucination_hit", "low_quality")
+        }
 
     notes: list[str] = []
     if flags.get("asr_empty") is True or flags.get("suspected_silence") is True:
