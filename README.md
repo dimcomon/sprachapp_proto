@@ -36,3 +36,8 @@ Siehe RUN.md für vollständige Beispiele und Optionen.
 ## Hinweis
 MVP2-Logik (Quality-Flags, Warnungen, Tutor-Flows) ist bewusst abgeschlossen
 und wird in MVP3 nicht verändert.
+
+## Coach (MVP5-A)
+Die App enthält einen ersten Coach (Textausgabe), der nach jeder Session
+kurzes Feedback gibt. Der Coach nutzt bestehende Transkripte und Statistiken
+und ist vorbereitet für eine spätere KI-/LLM-Anbindung.

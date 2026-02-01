@@ -3,7 +3,7 @@
 ## MVP1 – Basis
 - CLI-Grundstruktur
 - Audioaufnahme + ASR (Whisper)
-- Retell / einfache Fragen
+- Wiedergabe (Retell) / einfache Fragen
 Status: abgeschlossen
 
 ## MVP2 – Tutor-Flows
@@ -13,17 +13,42 @@ Status: abgeschlossen
 - Speicherung von Sessions
 Status: abgeschlossen
 
-## MVP3 – Analyse & Auswertung
-- Report / Stats
-- Progress-Ansicht (Median, Quoten)
+## MVP3 – Analyse & Qualität
+- Zentrale Qualitätslogik (Flags, low_quality)
+- Einheitliche Warn- und Debug-Ausgabe
+- Report / Stats / Progress-Ansicht
 - Filter (low_quality, empty)
-- Fokus-Modus (technisch)
 Status: abgeschlossen
 
-## MVP4-B – Didaktik (aktuell)
+## MVP4 – Didaktik & Lernsteuerung
 - Schwierigkeitsstufen (easy / medium / hard)
-- Sprachliche Variation (Hinweise)
-- Retell-Hinweis (Umformulieren)
-- Fokus bleibt manuell
-- Keine Änderungen an Qualitätslogik
-Status: abgeschlossen
+- Themen-Varianz (Perspektive, Fokus)
+- Sprachliche Variation (Umformulieren, Synonyme)
+- Manueller Fokus-Modus
+- Define-Tutor (Begriff erklären → Wiedergabe → Q1–Q3)
+Status: abgeschlossen (eingefroren)
+
+## MVP5-A – Coach (Stub)
+- Erste Coaching-Ebene über bestehende Sessions
+- Coach liest:
+  - Modus (Wiedergabe, Q1–Q3)
+  - Transkript
+  - vorhandene Stats / Flags
+- Ausgabe:
+  - Nur Text (CLI)
+  - Keine neue Qualitätslogik
+  - Kein neues DB-Schema
+- Integration in:
+  - define
+  - news
+  - book
+- Vorbereitung für:
+  - spätere KI-/LLM-Anbindung
+  - App-Frontend (iOS)
+Status: in Arbeit
+
+## Coach (MVP5-A)
+
+### Define mit Coach
+```bash
+python3 sprachapp_main.py define --term "endoskop"
