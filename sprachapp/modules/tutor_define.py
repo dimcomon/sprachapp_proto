@@ -13,6 +13,16 @@ from sprachapp.core.db import insert_session
 from sprachapp.core.coach import generate_coach_feedback, CoachInput
 
 
+def _print_coach_block(coach_out) -> None:
+    """
+    Einheitliche Ausgabe des Coach-Feedbacks.
+    Erwartet ein CoachOutput-Objekt mit feedback_text.
+    """
+    print("\n--- COACH-FEEDBACK ---")
+    print(coach_out.feedback_text)
+    print()  # Leerzeile für sauberen Übergang
+
+    
 def _slug(s: str) -> str:
     s = s.strip().lower()
     s = re.sub(r"[^a-z0-9äöüß]+", "-", s, flags=re.IGNORECASE)
@@ -173,9 +183,10 @@ def run_define_session(
     print("TIPP: Fortschritt ansehen mit: python3 sprachapp_main.py report --progress --last 200")
     print("\nTranskript:")
     print(transcript + "\n")
-
-    #COACH
     
+    # COACH (einheitliche Platzierung)
+    print("\n--- COACH-FEEDBACK ---")
+
     coach_out = generate_coach_feedback(
         CoachInput(
             mode="retell",
@@ -186,8 +197,7 @@ def run_define_session(
         )
     )
 
-    print(coach_out.feedback_text + "\n")
-
+    _print_coach_block(coach_out)
 
     # Q1–Qn
     for i in range(1, int(questions) + 1):
@@ -253,6 +263,6 @@ def run_define_session(
             )
         )
 
-        print(coach_out.feedback_text + "\n")
+        _print_coach_block(coach_out)
 
     cleanup_audio_retention(Path("data/audio"), keep_last=keep_last_audios, keep_days=keep_days)

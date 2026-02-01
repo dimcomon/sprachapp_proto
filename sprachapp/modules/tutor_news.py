@@ -18,6 +18,12 @@ from sprachapp.core.coach import generate_coach_feedback, CoachInput
 PROGRESS_PATH = Path("data/news_progress.json")
 
 
+def _print_coach_block(coach_out) -> None:
+    print("\n--- COACH-FEEDBACK ---")
+    print(coach_out.feedback_text)
+    print()
+
+    
 def _news_key(news_file: Path) -> str:
     h = hashlib.sha1(str(news_file.resolve()).encode("utf-8")).hexdigest()[:12]
     return h
@@ -329,7 +335,7 @@ def _record_and_transcribe(
             stats_payload=payload,
         )
     )
-    print(coach_out.feedback_text + "\n")
+    _print_coach_block(coach_out)
 
     print("Stats:", payload)
 
