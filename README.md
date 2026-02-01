@@ -41,3 +41,9 @@ und wird in MVP3 nicht verändert.
 Die App enthält einen ersten Coach (Textausgabe), der nach jeder Session
 kurzes Feedback gibt. Der Coach nutzt bestehende Transkripte und Statistiken
 und ist vorbereitet für eine spätere KI-/LLM-Anbindung.
+
+### LLM-Logging (optional)
+- Aktivieren mit: `export COACH_LOG=1`
+- Pro Coach-Call wird eine technische Logzeile ausgegeben:
+  - mode, success, latency_ms
+- Es werden **keine Inhalte** (Transkripte/Feedback) geloggt.
