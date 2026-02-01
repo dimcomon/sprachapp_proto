@@ -18,7 +18,6 @@ def _print_coach_block(coach_out) -> None:
     Einheitliche Ausgabe des Coach-Feedbacks.
     Erwartet ein CoachOutput-Objekt mit feedback_text.
     """
-    print("\n--- COACH-FEEDBACK ---")
     print(coach_out.feedback_text)
     print()  # Leerzeile für sauberen Übergang
 
@@ -45,6 +44,34 @@ def _prompt_q(level: str, q: int) -> str:
     if q == 2:
         return "Frage 2 (Gründe): Nenne 2 Gründe und ein kurzes Beispiel."
     return "Frage 3 (Ursache→Wirkung): Erkläre Ursache → Wirkung → Folge (2–3 Sätze)."
+
+
+def _prompt_for(level: str, mode: str) -> str:
+    level = (level or "easy").strip().lower()
+    mode = (mode or "").strip().lower()
+
+    if mode == "q1":
+        if level == "easy":
+            return "Q1 (leicht): Genau 1 Satz. Kernaussage/These. Kein Beispiel. Nicht mit „Ein … ist …“ beginnen."
+        if level == "medium":
+            return "Q1 (mittel): Genau 1 Satz. These + kurze Begründung (1× weil/denn). Kein Beispiel."
+        return "Q1 (schwer): Genau 1 Satz. Präzise These mit klarer Wertung."
+
+    if mode == "q2":
+        if level == "easy":
+            return "Q2 (leicht): Genau 2 Sätze: 2 Gründe (je 1 Satz). Kein Beispiel."
+        if level == "medium":
+            return "Q2 (mittel): Genau 3 Sätze: 2 Gründe + 1 Beispiel."
+        return "Q2 (schwer): Genau 3 Sätze: 2 starke Gründe + 1 konkretes Beispiel."
+
+    if mode == "q3":
+        if level == "easy":
+            return "Q3 (leicht): Genau 3 Sätze: Ursache → Wirkung → Folge."
+        if level == "medium":
+            return "Q3 (mittel): Genau 3 Sätze: Ursache → Wirkung → Folge (1× weil/deshalb/daher)."
+        return "Q3 (schwer): Genau 3 Sätze: Ursache → Wirkung → Folge. Sehr präzise."
+
+    return "Antwort: bitte kurz und klar."
 
 
 def run_define_session(
@@ -143,7 +170,11 @@ def run_define_session(
 
     print("\n" + _prompt_retell(level) + "\n→ Vermeide gleiche Formulierungen wie zuvor.")
     try:
-        record_mic_to_wav(out_path=out, minutes=max(1/60, retell_seconds / 60.0), device=device)
+        record_mic_to_wav(
+            out_path=out,
+            minutes=max(0.2, q_seconds / 60.0),
+            device=device,
+        )    
     except KeyboardInterrupt:
         print("\nAbgebrochen.")
         raise SystemExit(0)
@@ -185,7 +216,6 @@ def run_define_session(
     print(transcript + "\n")
     
     # COACH (einheitliche Platzierung)
-    print("\n--- COACH-FEEDBACK ---")
 
     coach_out = generate_coach_feedback(
         CoachInput(
@@ -200,21 +230,21 @@ def run_define_session(
     _print_coach_block(coach_out)
 
     # Q1–Qn
-    for i in range(1, int(questions) + 1):
-        ts = datetime.now(UTC).strftime("%Y-%m-%dT%H-%M-%S")
-        out = Path("data/audio") / f"{ts}_define-q{i}.wav"
+    modes = ["q1", "q2", "q3"]
+    questions = [_prompt_for(level, m) for m in modes]
 
-        q_text = _prompt_q(level, i)
+    for mode, q in zip(modes, questions):
         print("\n" + "-" * 80)
-        print(q_text)
-        print("→ Beginne nicht mit demselben Wort wie zuvor.")
+        print(q)
         print("-" * 80)
 
-        try:
-            record_mic_to_wav(out_path=out, minutes=max(1/60, q_seconds / 60.0), device=device)
-        except KeyboardInterrupt:
-            print("\nAbgebrochen.")
-            raise SystemExit(0)
+        # Aufnahme
+        out = Path("data/audio") / f"{ts}_define-{mode}.wav"
+        record_mic_to_wav(
+            out_path=out,
+            minutes=max(0.2, q_seconds / 60.0),
+            device=device,
+        )
 
         raw = transcribe_with_whisper(str(out))
         transcript = cut_at_punkt(raw) if cut_punkt else normalize_text(raw)
@@ -223,14 +253,14 @@ def run_define_session(
         try:
             dur_s = wav_duration_seconds(out)
         except Exception:
-            dur_s = None
+            pass
 
         stats = compute_stats(transcript)
         payload = stats.__dict__.copy()
         payload["duration_seconds"] = round(dur_s, 2) if dur_s else None
         payload["wpm"] = round(stats.word_count / (dur_s / 60.0), 1) if dur_s and dur_s > 0 else None
 
-        mode = f"q{i}"
+        # Qualitätsflags
         flags = compute_quality_flags(
             mode=mode,
             transcript=transcript,
@@ -240,6 +270,7 @@ def run_define_session(
         payload.update(flags)
         print_quality_warnings(mode=mode, flags=flags)
 
+        # Persistenz
         session_id = insert_session(
             topic=f"{topic_base}:{mode}",
             mode=mode,
@@ -248,21 +279,20 @@ def run_define_session(
             stats_payload=payload,
             audio_path=str(out),
         )
+
         print(f"\nSession gespeichert: id={session_id} | mode={mode}")
         print("TIPP: Fortschritt ansehen mit: python3 sprachapp_main.py report --progress --last 200")
         print("\nTranskript:")
         print(transcript + "\n")
 
+        # Coach
         coach_out = generate_coach_feedback(
             CoachInput(
-                mode=mode,                     # hier EXISTIERT mode
+                mode=mode,
                 topic=f"define:{term_key}",
                 source_text=source_text,
                 transcript=transcript,
                 stats_payload=payload,
             )
         )
-
         _print_coach_block(coach_out)
-
-    cleanup_audio_retention(Path("data/audio"), keep_last=keep_last_audios, keep_days=keep_days)

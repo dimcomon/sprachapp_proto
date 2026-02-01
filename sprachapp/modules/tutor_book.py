@@ -19,7 +19,6 @@ PROGRESS_PATH = Path("data/book_progress.json")
 
 
 def _print_coach_block(coach_out) -> None:
-    print("\n--- COACH-FEEDBACK ---")
     print(coach_out.feedback_text)
     print()
 
@@ -79,13 +78,39 @@ def get_chunk_index(book_file: Path, total_chunks: int, chunk: int | None, next_
     return idx
 
 
-def ask_questions_default(n: int = 3) -> list[str]:
-    base = [
-        "Frage 1 (These): Formuliere die Kernaussage in genau 1 Satz.",
-        "Frage 2 (Argument): Nenne 2 konkrete Aussagen, um Behauptung zu stützen.",
-        "Frage 3 (Begründung): Warum funktioniert der Plan/das Vorgehen? Nutze 'weil/deshalb' in deinem Satz.",
-    ]
-    return base[:max(1, min(n, len(base)))]
+def _prompt_for(level: str, mode: str) -> str:
+    level = (level or "easy").strip().lower()
+    mode = (mode or "").strip().lower()
+
+    if mode == "q1":
+        if level == "easy":
+            return "Q1 (leicht): Genau 1 Satz. Kernaussage/These. Kein Beispiel, keine Wiederholung aus der Wiedergabe. Nicht mit „Ein … ist …“ beginnen."
+        if level == "medium":
+            return "Q1 (mittel): Genau 1 Satz. These + kurze Begründung im selben Satz (1× weil/denn). Kein Beispiel. Nicht mit „Ein … ist …“ beginnen."
+        return "Q1 (schwer): Genau 1 Satz. Präzise These mit klarer Wertung (ohne Aufzählung, ohne Beispiel). Nicht mit „Ein … ist …“ beginnen."
+
+    if mode == "q2":
+        if level == "easy":
+            return "Q2 (leicht): Genau 2 Sätze: 2 Gründe (je 1 Satz). Keine Wiederholung aus Q1. Kein Beispiel. Nicht mit „Ein … ist …“ beginnen."
+        if level == "medium":
+            return "Q2 (mittel): Genau 3 Sätze: 2 Gründe + genau 1 Beispiel (Beispiel als eigener Satz). Keine Wiederholung aus Q1/Q2. Nicht mit „Ein … ist …“ beginnen."
+        return "Q2 (schwer): Genau 3 Sätze: 2 starke Gründe + 1 konkretes Beispiel. Keine Floskeln, keine Aufzählungswörter („erstens…“)."
+
+    if mode == "q3":
+        if level == "easy":
+            return "Q3 (leicht): Genau 3 Sätze: Ursache → Wirkung → Folge (je 1 Satz). Kein Beispiel. Nicht mit „Ein … ist …“ beginnen."
+        if level == "medium":
+            return "Q3 (mittel): Genau 3 Sätze: Ursache → Wirkung → Folge. Nutze genau 1× weil/deshalb/daher (nur einmal)."
+        return "Q3 (schwer): Genau 3 Sätze: Ursache → Wirkung → Folge. Sehr präzise, keine Wiederholung aus Q1/Q2."
+
+    # Fallback
+    return "Antwort: bitte kurz und klar."
+
+
+def ask_questions_default(n: int = 3, level: str = "easy") -> list[str]:
+    modes = ["q1", "q2", "q3"]
+    prompts = [_prompt_for(level, m) for m in modes]
+    return prompts[:max(1, min(n, len(prompts)))]
 
 
 def _with_retell_hint(text: str) -> str:
@@ -192,22 +217,24 @@ def run_book_session(
     )
     print(f"Retell-Audio: {retell_audio}")
 
-    qs = ask_questions_default(n=questions)
-    for i, q in enumerate(qs, start=1):
+    qs = ask_questions_default(n=questions, level=level)
+    modes = ["q1", "q2", "q3"][:len(qs)]
+
+    for mode, q in zip(modes, qs):
         print("\n" + "-" * 80)
         print(q)
         print(_with_variation_hint(""))
         print("-" * 80)
 
         forced_bonus = None
-        if "Begründung" in q:
+        if mode == "q3":
             forced_bonus = suggest_bonus_terms(chunk_text, None, k=5)
             print("BONUS (Pflicht): Verwende 1 dieser Begriffe in deiner Antwort:")
             print(", ".join(forced_bonus) if forced_bonus else "(keine)")
             print()
 
         audio_path, transcript, payload = _record_and_transcribe(
-            mode=f"q{i}",
+            mode=mode,
             topic=topic_base,
             source_text=chunk_text + "\n\n" + q,
             device=device,
@@ -218,7 +245,7 @@ def run_book_session(
             forced_bonus_terms=forced_bonus,
         )
 
-        if i == 3:
+        if mode == "q3":
             print()
             print(make_q3_feedback(transcript, payload))
 

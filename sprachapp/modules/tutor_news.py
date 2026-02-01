@@ -19,7 +19,6 @@ PROGRESS_PATH = Path("data/news_progress.json")
 
 
 def _print_coach_block(coach_out) -> None:
-    print("\n--- COACH-FEEDBACK ---")
     print(coach_out.feedback_text)
     print()
 
@@ -100,25 +99,24 @@ def _prompt_for(level: str, mode: str) -> str:
     
     if mode == "q1":
         if level == "easy":
-            return "Q1 (leicht): 1 Satz. Deine These/Meinung."
+            return "Q1 (leicht): Genau 1 Satz. Kernaussage/These. Kein Beispiel, keine Wiederholung aus der Wiedergabe. Nicht mit „Ein … ist …“ beginnen."
         if level == "medium":
-            return "Q1 (mittel): 2 Sätze. These + kurze Begründung (1× weil/denn)."
-        return "Q1 (schwer): 3 Sätze. These + 2 Argumente (klar getrennt)."
+            return "Q1 (mittel): Genau 1 Satz. These + kurze Begründung im selben Satz (1× weil/denn). Kein Beispiel. Nicht mit „Ein … ist …“ beginnen."
+        return "Q1 (schwer): Genau 1 Satz. Präzise These mit klarer Wertung (ohne Aufzählung, ohne Beispiel). Nicht mit „Ein … ist …“ beginnen."
 
     if mode == "q2":
         if level == "easy":
-            return "Q2 (leicht): 2 Sätze. Nenne 2 Fakten/Aussagen aus dem Abschnitt."
+            return "Q2 (leicht): Genau 2 Sätze: 2 Gründe (je 1 Satz). Keine Wiederholung aus Q1. Kein Beispiel. Nicht mit „Ein … ist …“ beginnen."
         if level == "medium":
-            return "Q2 (mittel): 3 Sätze. 2 Gründe + 1 Beispiel."
-        return "Q2 (schwer): 4 Sätze. 2 Fakten + Beispiel + kurzer Schluss."
+            return "Q2 (mittel): Genau 3 Sätze: 2 Gründe + genau 1 Beispiel (Beispiel als eigener Satz). Keine Wiederholung aus Q1/Q2. Nicht mit „Ein … ist …“ beginnen."
+        return "Q2 (schwer): Genau 3 Sätze: 2 starke Gründe + 1 konkretes Beispiel. Keine Floskeln, keine Aufzählungswörter („erstens…“)."
 
     if mode == "q3":
         if level == "easy":
-            return "Q3 (leicht): 2 Sätze. Ursache→Wirkung mit weil/deshalb."
+            return "Q3 (leicht): Genau 3 Sätze: Ursache → Wirkung → Folge (je 1 Satz). Kein Beispiel. Nicht mit „Ein … ist …“ beginnen."
         if level == "medium":
-            return "Q3 (mittel): 3 Sätze. Ursache→Wirkung + Folge."
-        return "Q3 (schwer): 2–3 Sätze. Ursache→Wirkung + Folge. (Genau 1× weil/deshalb/daher)"
-    return ""
+            return "Q3 (mittel): Genau 3 Sätze: Ursache → Wirkung → Folge. Nutze genau 1× weil/deshalb/daher (nur einmal)."
+        return "Q3 (schwer): Genau 3 Sätze: Ursache → Wirkung → Folge. Sehr präzise, keine Wiederholung aus Q1/Q2."
 
 
 def _with_retell_hint(text: str, mode: str) -> str:
