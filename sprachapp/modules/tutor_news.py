@@ -329,7 +329,6 @@ def _record_and_transcribe(
             stats_payload=payload,
         )
     )
-    print("COACH:")
     print(coach_out.feedback_text + "\n")
 
     print("Stats:", payload)

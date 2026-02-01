@@ -267,6 +267,7 @@ def _record_and_transcribe(
     # Flags IMMER speichern
     payload.update(flags)
 
+    # Target/Bonus nur wo relevant
     if mode in ("retell", "q3"):
         targets = suggest_target_terms(source_text, transcript, k=8)
         payload["target_terms"] = targets
@@ -302,7 +303,6 @@ def _record_and_transcribe(
             stats_payload=payload,
         )
     )
-    print("COACH:")
     print(coach_out.feedback_text + "\n")
 
     print("Stats:", payload)

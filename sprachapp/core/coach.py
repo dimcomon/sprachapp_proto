@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 import os
+import re
 from sprachapp.core.coach_llm import run_llm_coach
 
 @dataclass
@@ -17,6 +18,71 @@ class CoachInput:
 @dataclass
 class CoachOutput:
     feedback_text: str  # reiner Text, später optional TTS
+    
+    def format_coach_output(*, feedback_text: str, score: float | None = None) -> str:
+        lines: list[str] = []
+        head = "COACH"
+        if score is not None:
+            head += f" (Score: {score:.2f})"
+        lines.append(head + ":")
+
+        # in max. 3 Punkte zerlegen (KI liefert oft Sätze)
+        parts = [p.strip() for p in feedback_text.replace("\n", " ").split(".") if p.strip()]
+        parts = parts[:3] if parts else [feedback_text.strip()]
+
+        for p in parts:
+            # Punkt wieder dranhängen, falls Satz
+            if not p.endswith(("!", "?", ".")):
+                p += "."
+            lines.append(f"- {p}")
+
+        return "\n".join(lines)
+
+
+def format_coach_output(*, feedback_text: str, score: float | None = None) -> str:
+    lines: list[str] = []
+
+    # Header
+    head = "COACH"
+    if score is not None:
+        head += f" (Score: {score:.2f})"
+    lines.append(head + ":")
+
+    # --- Clean ---
+    clean = (feedback_text or "").replace("\n", " ").strip()
+
+    # Quotes normalisieren/entfernen (damit keine offenen „ hängen bleiben)
+    clean = clean.replace("“", "").replace("”", "").replace('"', "")
+    clean = clean.replace("„", "").replace("“", "").replace("”", "").replace("‚", "").replace("‘", "")
+
+    # Abkürzungen schützen
+    clean = clean.replace("z. B.", "zB").replace("z.B.", "zB")
+
+    # Ellipsen normalisieren
+    clean = clean.replace("…", "...")
+
+    # In Sätze schneiden: nach . ! ? oder ...
+    parts = re.split(r"(?<=[.!?])\s+|\.{3}\s+", clean)
+    parts = [p.strip() for p in parts if p and p.strip()]
+
+    # Falls gar nichts brauchbar: alles als ein Punkt
+    if not parts:
+        parts = [clean] if clean else ["(kein Feedback)"]
+
+    # Max. 3 Punkte
+    parts = parts[:3]
+
+    # Abkürzung zurück
+    parts = [p.replace("zB", "z. B.") for p in parts]
+
+    # Bullets bauen
+    for p in parts:
+        # Endzeichen ergänzen, falls keins da
+        if not p.endswith(("!", "?", ".")):
+            p += "."
+        lines.append(f"- {p}")
+
+    return "\n".join(lines)
 
 
 def generate_coach_feedback(inp: CoachInput) -> CoachOutput:
@@ -37,7 +103,12 @@ def generate_coach_feedback(inp: CoachInput) -> CoachOutput:
                 transcript=inp.transcript,
             )
             # Wenn LLM sauber antwortet, nutzen wir es direkt.
-            return CoachOutput(feedback_text=llm.feedback_text)
+            return CoachOutput(
+                feedback_text=format_coach_output(
+                    feedback_text=llm.feedback_text,
+                    score=llm.score
+                )
+            )
         except Exception:
             # Fallback ohne Drama
             pass
@@ -60,4 +131,9 @@ def generate_coach_feedback(inp: CoachInput) -> CoachOutput:
     if not notes:
         notes.append("Gut. Beim nächsten Versuch: klarer strukturieren und ein kurzes Beispiel nennen.")
 
-    return CoachOutput(feedback_text=" ".join(notes))
+    return CoachOutput(
+        feedback_text=format_coach_output(
+            feedback_text=" ".join(notes),
+            score=None
+        )
+    )

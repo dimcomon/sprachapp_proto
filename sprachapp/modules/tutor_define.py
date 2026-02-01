@@ -186,7 +186,6 @@ def run_define_session(
         )
     )
 
-    print("COACH:")
     print(coach_out.feedback_text + "\n")
 
 
@@ -254,7 +253,6 @@ def run_define_session(
             )
         )
 
-        print("COACH:")
         print(coach_out.feedback_text + "\n")
 
     cleanup_audio_retention(Path("data/audio"), keep_last=keep_last_audios, keep_days=keep_days)
