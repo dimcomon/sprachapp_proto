@@ -10,6 +10,7 @@ from sprachapp.core.asr import transcribe_with_whisper
 from sprachapp.core.stats import compute_stats
 from sprachapp.modules._tutor_common import compute_quality_flags, print_quality_warnings
 from sprachapp.core.db import insert_session
+from sprachapp.core.coach import generate_coach_feedback, CoachInput
 
 
 def _slug(s: str) -> str:
@@ -173,6 +174,22 @@ def run_define_session(
     print("\nTranskript:")
     print(transcript + "\n")
 
+    #COACH
+    
+    coach_out = generate_coach_feedback(
+        CoachInput(
+            mode="retell",
+            topic=f"define:{term_key}",
+            source_text=source_text,
+            transcript=transcript,
+            stats_payload=payload,
+        )
+    )
+
+    print("COACH:")
+    print(coach_out.feedback_text + "\n")
+
+
     # Q1–Qn
     for i in range(1, int(questions) + 1):
         ts = datetime.now(UTC).strftime("%Y-%m-%dT%H-%M-%S")
@@ -226,5 +243,18 @@ def run_define_session(
         print("TIPP: Fortschritt ansehen mit: python3 sprachapp_main.py report --progress --last 200")
         print("\nTranskript:")
         print(transcript + "\n")
+
+        coach_out = generate_coach_feedback(
+            CoachInput(
+                mode=mode,                     # hier EXISTIERT mode
+                topic=f"define:{term_key}",
+                source_text=source_text,
+                transcript=transcript,
+                stats_payload=payload,
+            )
+        )
+
+        print("COACH:")
+        print(coach_out.feedback_text + "\n")
 
     cleanup_audio_retention(Path("data/audio"), keep_last=keep_last_audios, keep_days=keep_days)

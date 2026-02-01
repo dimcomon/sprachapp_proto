@@ -12,6 +12,7 @@ from sprachapp.core.db import insert_session
 from sprachapp.core.feedback import make_q3_feedback
 
 from sprachapp.modules._tutor_common import compute_quality_flags, print_quality_warnings, stats_to_payload
+from sprachapp.core.coach import generate_coach_feedback, CoachInput
 
 
 PROGRESS_PATH = Path("data/book_progress.json")
@@ -291,6 +292,19 @@ def _record_and_transcribe(
     print(f"\nSession gespeichert: id={session_id} | mode={mode}")
     print("TIPP: Fortschritt ansehen mit: python3 sprachapp_main.py report --progress --last 200")
     print(f"Transkript:\n{transcript}\n")
+
+    coach_out = generate_coach_feedback(
+        CoachInput(
+            mode=mode,
+            topic=topic,
+            source_text=source_text,
+            transcript=transcript,
+            stats_payload=payload,
+        )
+    )
+    print("COACH:")
+    print(coach_out.feedback_text + "\n")
+
     print("Stats:", payload)
 
     cleanup_audio_retention(Path("data/audio"), keep_last=keep_last_audios, keep_days=int(keep_days or 0))
