@@ -10,18 +10,13 @@ from sprachapp.core.asr import transcribe_with_whisper
 from sprachapp.core.stats import compute_stats
 from sprachapp.modules._tutor_common import compute_quality_flags, print_quality_warnings
 from sprachapp.core.db import insert_session
-from sprachapp.core.coach import generate_coach_feedback, CoachInput
+
+from sprachapp.core.coach_backend_factory import get_coach_backend
+from sprachapp.core.coach_backend import CoachRequest
+
+from sprachapp.core.coach_print import print_coach_block
 
 
-def _print_coach_block(coach_out) -> None:
-    """
-    Einheitliche Ausgabe des Coach-Feedbacks.
-    Erwartet ein CoachOutput-Objekt mit feedback_text.
-    """
-    print(coach_out.feedback_text)
-    print()  # Leerzeile für sauberen Übergang
-
-    
 def _slug(s: str) -> str:
     s = s.strip().lower()
     s = re.sub(r"[^a-z0-9äöüß]+", "-", s, flags=re.IGNORECASE)
@@ -215,21 +210,9 @@ def run_define_session(
     print("\nTranskript:")
     print(transcript + "\n")
     
-    # COACH (einheitliche Platzierung)
-
-    coach_out = generate_coach_feedback(
-        CoachInput(
-            mode="retell",
-            topic=f"define:{term_key}",
-            source_text=source_text,
-            transcript=transcript,
-            stats_payload=payload,
-        )
-    )
-
-    _print_coach_block(coach_out)
-
     # Q1–Qn
+    backend = get_coach_backend()
+
     modes = ["q1", "q2", "q3"]
     questions = [_prompt_for(level, m) for m in modes]
 
@@ -285,14 +268,14 @@ def run_define_session(
         print("\nTranskript:")
         print(transcript + "\n")
 
-        # Coach
-        coach_out = generate_coach_feedback(
-            CoachInput(
-                mode=mode,
-                topic=f"define:{term_key}",
+        # Coach (NEU: Backend)
+        resp = backend.generate(
+            CoachRequest(
+                mode=mode,  # q1/q2/q3
+                topic=f"define:{term_key}:{mode}",
                 source_text=source_text,
                 transcript=transcript,
                 stats_payload=payload,
             )
         )
-        _print_coach_block(coach_out)
+        print_coach_block(resp)
