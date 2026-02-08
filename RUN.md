@@ -9,12 +9,29 @@ python3.13 -m venv .venv
 source .venv/bin/activate
 pip install --upgrade pip
 
-pip install torch openai-whisper sounddevice numpy
+pip install -r requirements.txt
+
+## Environment (.env)
+Die App liest Konfiguration aus `sprachapp.env` im Projekt-Root.
+
+Minimal erforderlich:
+OPENAI_API_KEY=sk-...
+COACH_BACKEND=openai
+
+Optional (C1 – Logging & Limits):
+COACH_LOG=1
+COACH_MAX_OUTPUT_TOKENS=280
+COACH_MAX_CALLS=0
 
 ## ffmpeg Check
 ffmpeg -version
 
 ## Run (Golden Path)
+Hinweis:
+- Standardmäßig wird das Mock-Backend genutzt.
+- Für KI-Feedback:
+  - COACH_BACKEND=openai in sprachapp.env setzen.
+  
 # News Tutor
 python3 sprachapp_main.py news --news-file news.txt --level easy --retell-seconds 60
 

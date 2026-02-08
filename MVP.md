@@ -73,17 +73,51 @@ Status: ✅ abgeschlossen
 
 ---
 
-## MVP6 – Backend-Trennung (geplant)
-Ziel: App-fähige Architektur vorbereiten.
+## MVP6 – KI-Coach & Backend-Trennung (abgeschlossen, eingefroren)
 
-- Backend-Interface für Coach
-- Austauschbare Implementierungen:
-  - OpenAI
-  - Mock / lokal
-- Feature-Flag (Backend-Auswahl)
-- Tutor-Code kennt kein OpenAI mehr direkt
+Ziel: App-fähige Architektur für KI-Feedback, sauber entkoppelt vom Tutor-Code.
 
-Status: ⏳ geplant
+### MVP6-A – Architektur & Entkopplung (abgeschlossen)
+- Einheitliches Coach-Interface:
+  - CoachRequest / CoachResponse
+- Zentrale Backend-Auswahl über Factory:
+  - get_coach_backend()
+  - Umschaltung per Env-Var (COACH_BACKEND)
+- MockCoachBackend als Referenz-Implementierung
+- Zentrale Ausgabe:
+  - print_coach_block()
+- Tutor-Code kennt kein OpenAI / kein externes Backend mehr
+- Alt-Code (coach.py) obsolet, aber noch vorhanden
+
+Status: ✅ abgeschlossen (eingefroren)
+
+---
+
+### MVP6-B – OpenAI-Backend & Qualitätsintegration (abgeschlossen)
+- OpenAICoachBackend (Responses API)
+- Umschaltung ausschließlich per Env-Var:
+  - COACH_BACKEND=openai
+- Einheitliche, strikt strukturierte Coach-Antwort:
+  - Einschätzung
+  - Verbesserungen
+  - Fokus
+- Mode-spezifische Didaktik:
+  - retell / q1 / q2 / q3
+- ASR-/Qualitäts-Integration:
+  - QWARN / low_quality / too_short / silence
+  - Coach reagiert mit Aufnahme-Hinweisen statt Inhaltskritik
+- Fallback-Mechanismus bei Backend-Fehlern
+- C1: Logging & Limits:
+  - Latenz-Logging
+  - Modell-/Fallback-Transparenz
+  - Token-Limit
+  - Optionales Call-Limit pro Session
+- Getestet mit:
+  - news
+  - book
+  - define (alt, eingefroren)
+
+Status: ✅ abgeschlossen (eingefroren, Tag: mvp6-b-freeze)
 
 ---
 

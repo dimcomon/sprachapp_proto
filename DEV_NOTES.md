@@ -26,16 +26,52 @@
 - Coach-Ausgabe ist vereinheitlicht (`_print_coach_block`)
 - Logs und UX-Ausgabe sind strikt getrennt
 
-## LLM / Backend (MVP6)
-- LLM-Coach optional (env-gesteuert)
-  - `COACH_USE_LLM=1` aktiviert LLM
-  - Fallback auf Stub bei Fehlern
-- Minimales Logging (keine Inhalte)
-  - Aktivieren mit `COACH_LOG=1`
-  - Pro Call: mode, success, latency_ms
-- Timeouts & Limits:
-  - `COACH_TIMEOUT_S` (Default: 12s)
-  - `COACH_MAX_OUTPUT_TOKENS` (Default: 250)
+## LLM / Backend (MVP6 – Stand: eingefroren)
+
+### Coach-Architektur
+- Einheitliches Interface:
+  - `CoachRequest` / `CoachResponse`
+- Zentrale Backend-Auswahl:
+  - `get_coach_backend()`
+  - Umschaltung ausschließlich per Env-Var
+
+### Backends
+- `MockCoachBackend`
+  - Referenz / Offline-Betrieb
+- `OpenAICoachBackend`
+  - OpenAI Responses API
+  - vollständig entkoppelt vom Tutor-Code
+
+### Aktivierung
+- Backend-Auswahl:
+  - `COACH_BACKEND=mock | openai`
+- API-Key:
+  - `OPENAI_API_KEY` (aus `sprachapp.env`)
+
+### Logging & Limits (C1)
+- Logging aktivieren:
+  - `COACH_LOG=1`
+- Pro Call (nur Metadaten):
+  - mode
+  - success
+  - latency_ms
+  - optional: fallback-Hinweis
+- Limits:
+  - `COACH_TIMEOUT_S` (Default: 15s)
+  - `COACH_MAX_OUTPUT_TOKENS` (Default: 280)
+  - `COACH_MAX_CALLS` (Default: 0 = unbegrenzt)
+
+### Fehlerbehandlung
+- Klare User-Meldungen bei:
+  - Timeout
+  - Auth / Billing
+  - Rate-Limit
+- Automatischer Modell-Fallback bei Fehlern
+
+### Datenschutz
+- Keine Transkripte
+- Keine Source-Texte
+- Keine Prompt-Inhalte im Log
 
 ## Hinweise
 - Keine Transkripte oder Nutzerinhalte werden geloggt
