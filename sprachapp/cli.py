@@ -3,17 +3,42 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
-from sprachapp.core.db import ensure_db, insert_session
-from sprachapp.core.audio import list_input_devices, record_mic_to_wav, wav_duration_seconds, cleanup_audio_retention
+from sprachapp.core.db import (
+    ensure_db,
+    insert_session,
+    add_vocab,
+    list_vocab_alpha,
+    get_vocab_by_term,
+    get_vocab_random,
+    mark_vocab_practiced,
+)
+from sprachapp.core.audio import (
+    list_input_devices, 
+    record_mic_to_wav, 
+    wav_duration_seconds, 
+    cleanup_audio_retention,
+)   
 from sprachapp.core.asr import transcribe_with_whisper
 from sprachapp.core.text import normalize_text, cut_at_punkt, overlap_metrics
 from sprachapp.core.stats import compute_stats, suggest_target_terms, terms_used
+from sprachapp.core.coach_backend_factory import get_coach_backend
+from sprachapp.core.coach_backend import CoachRequest
+from sprachapp.core.coach_print import print_coach_block
 
 from sprachapp.modules.tutor_book import run_book_session
-from sprachapp.modules.report import fetch_last_sessions, print_table, write_csv, print_summary, print_progress
+from sprachapp.modules.report import (
+    fetch_last_sessions, 
+    print_table, 
+    write_csv, 
+    print_summary, 
+    print_progress,
+)    
 from sprachapp.modules.selfcheck import run_selfcheck
 from sprachapp.modules.tutor_news import run_news_session
-from sprachapp.modules._tutor_common import compute_quality_flags, print_quality_warnings
+from sprachapp.modules._tutor_common import (
+    compute_quality_flags, 
+    print_quality_warnings,
+)
 from sprachapp.modules.tutor_define import run_define_session
 
 
@@ -98,6 +123,37 @@ def cmd_speak(args: argparse.Namespace) -> None:
 
     if prev:
         print(f"\nLetzte Session war id={prev.get('id')} | mode={prev.get('mode')} | topic={prev.get('topic')}")
+
+
+def cmd_define_vocab_add(args: argparse.Namespace) -> None:
+    ensure_db()
+    vid = add_vocab(
+        term=args.term,
+        definition_text=args.definition,
+        difficulty=args.level,
+        lang=args.lang,
+        example_1=args.example1,
+        example_2=args.example2,
+        source=args.source,
+    )
+    print(f"Vokabel gespeichert: id={vid} | term={args.term}")
+
+
+def cmd_define_vocab_list(args: argparse.Namespace) -> None:
+    ensure_db()
+    rows = list_vocab_alpha()
+
+    if not rows:
+        print("Keine Vokabeln gespeichert.")
+        return
+
+    print("\n--- VOCAB (alphabetisch) ---")
+    for r in rows:
+        term = r.get("term")
+        level = r.get("difficulty")
+        definition = r.get("definition_text")
+        print(f"- {term} [{level}] — {definition}")
+
 
 # Focus q1
 def cmd_focus_q1(args: argparse.Namespace) -> None:
@@ -376,6 +432,47 @@ def cmd_focus_retell(args: argparse.Namespace) -> None:
     print("TIPP: Fortschritt ansehen mit: python3 sprachapp_main.py report --progress --last 200")
 
 
+def cmd_define_vocab_practice(args: argparse.Namespace) -> None:
+    ensure_db()
+
+    if args.random:
+        vocab = get_vocab_random()
+        if not vocab:
+            print("Keine Vokabeln vorhanden.")
+            return
+    else:
+        vocab = get_vocab_by_term(args.term)
+        if not vocab:
+            print(f"Vokabel nicht gefunden: {args.term}")
+            return
+
+    term = vocab["term"]
+    difficulty = vocab["difficulty"]
+    definition = vocab["definition_text"]
+
+    print(f"\nBegriff: {term} [{difficulty}]")
+    print(f"Bedeutung: {definition}\n")
+
+    print("Aufgabe:")
+    print("- Erkläre das Wort in deinen eigenen Worten.")
+    print("- Gib zwei getrennte Beispielsätze.\n")
+
+    transcript = input("Deine Antwort: ").strip()
+
+    backend = get_coach_backend()
+    req = CoachRequest(
+        topic=term,
+        mode="define",
+        source_text=definition,
+        transcript=transcript,
+        stats_payload={"difficulty": difficulty},
+    )
+
+    resp = backend.generate(req)
+    print_coach_block(resp)
+    mark_vocab_practiced(vocab["id"])
+    print(f"(progress) practiced={vocab['practice_count'] + 1}")
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="sprachapp")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -475,6 +572,24 @@ def build_parser() -> argparse.ArgumentParser:
     d.add_argument("--cut-punkt", action="store_true", help="Schneidet Transkript bis letztes 'punkt'.")
     d.add_argument("--keep-last-audios", type=int, default=10, help="Behält nur die letzten N WAVs.")
     d.add_argument("--keep-days", type=int, default=0, help="Löscht WAVs älter als X Tage (0=aus).")
+
+    # define-vocab (neu, MVP7/A2-2)
+    dv = sub.add_parser("define-vocab", help="Vokabel-Trainer (DB): add/list (ohne Coach, ohne Hints).")
+    dv_sub = dv.add_subparsers(dest="dv_cmd", required=True)
+
+    dv_add = dv_sub.add_parser("add", help="Vokabel speichern/aktualisieren.")
+    dv_add.add_argument("--term", required=True, help="Begriff, z. B. 'Axt'.")
+    dv_add.add_argument("--definition", required=True, help="Bedeutungstext (kurz).")
+    dv_add.add_argument("--level", choices=["easy", "medium", "hard"], default="medium", help="Schwierigkeitsstufe.")
+    dv_add.add_argument("--lang", default="de", help="Sprache, default: de")
+    dv_add.add_argument("--example1", default=None, help="Beispielsatz 1 (optional).")
+    dv_add.add_argument("--example2", default=None, help="Beispielsatz 2 (optional).")
+    dv_add.add_argument("--source", default="manual", help="Quelle: manual|news|book (optional).")
+
+    dv_list = dv_sub.add_parser("list", help="Alphabetische Liste aller Vokabeln.")
+    dv_practice = dv_sub.add_parser("practice", help="Vokabel üben (Coach + Hints on-the-fly).")
+    dv_practice.add_argument("--term", help="Begriff gezielt üben.")
+    dv_practice.add_argument("--random", action="store_true", help="Zufällige Vokabel üben.")
 
     # selfcheck
     c = sub.add_parser("selfcheck", help="Technischer Systemcheck (Imports/DB/Filesystem/Report).")
@@ -601,6 +716,18 @@ def main():
             keep_days=args.keep_days,
         )
         return
+
+    if args.cmd == "define-vocab":
+        if args.dv_cmd == "add":
+            cmd_define_vocab_add(args)
+            return
+        if args.dv_cmd == "list":
+            cmd_define_vocab_list(args)
+            return
+        if args.dv_cmd == "practice":
+            cmd_define_vocab_practice(args)
+            return
+        raise SystemExit(f"Unbekannter define-vocab Befehl: {args.dv_cmd}")
 
     if args.cmd == "selfcheck":
         raise SystemExit(run_selfcheck(
