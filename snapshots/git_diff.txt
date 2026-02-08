@@ -1,0 +1,166 @@
+diff --git a/requirements.txt b/requirements.txt
+index 4bef257..2ac0bde 100644
+--- a/requirements.txt
++++ b/requirements.txt
+@@ -1,4 +1,6 @@
+ openai-whisper
+ torch
+ sounddevice
+-numpy
+\ No newline at end of file
++numpy
++openai>=1.0.0
++python-dotenv>=1.0.0
+\ No newline at end of file
+diff --git a/sprachapp/core/coach_backend_factory.py b/sprachapp/core/coach_backend_factory.py
+index 46f6c10..58ba68b 100644
+--- a/sprachapp/core/coach_backend_factory.py
++++ b/sprachapp/core/coach_backend_factory.py
+@@ -1,4 +1,5 @@
+ from __future__ import annotations
++
+ import os
+ 
+ from sprachapp.core.coach_backend import CoachBackend
+@@ -6,16 +7,18 @@ from sprachapp.core.coach_backend_mock import MockCoachBackend
+ 
+ 
+ def get_coach_backend() -> CoachBackend:
+-    """
+-    Wählt das Coach-Backend per Env-Flag.
++    """Wählt das Coach-Backend per Env-Flag.
+     COACH_BACKEND=mock | openai
+     Default: mock
+     """
++    print("DEBUG factory COACH_BACKEND =", os.getenv("COACH_BACKEND"))
++
+     backend = os.getenv("COACH_BACKEND", "mock").lower()
+ 
+     if backend == "openai":
+-        # Platzhalter – wird in MVP6-B implementiert
+-        raise NotImplementedError("OpenAI-Backend folgt in MVP6-B")
++        # Lazy import so Mock can run without the OpenAI dependency installed.
++        from sprachapp.core.coach_backend_openai import OpenAICoachBackend
++
++        return OpenAICoachBackend()
+ 
+-    # Default
+     return MockCoachBackend()
+\ No newline at end of file
+diff --git a/sprachapp/core/coach_print.py b/sprachapp/core/coach_print.py
+index 6de7af0..1c7d543 100644
+--- a/sprachapp/core/coach_print.py
++++ b/sprachapp/core/coach_print.py
+@@ -1,15 +1,13 @@
+ from __future__ import annotations
+ 
++
+ def print_coach_block(coach_out) -> None:
+-    """
+-    Einheitliche Ausgabe für CoachResponse (Mock/OpenAI) und alte dict-Formate.
+-    """
+     print("\n--- COACH-FEEDBACK ---")
+ 
+-    # Neu: CoachResponse (Attribute-basiert)
++    # 1) CoachResponse (normaler Fall)
+     if hasattr(coach_out, "success") and hasattr(coach_out, "feedback_text"):
+-        if getattr(coach_out, "success", False):
+-            text = (getattr(coach_out, "feedback_text", "") or "").strip()
++        if coach_out.success:
++            text = (coach_out.feedback_text or "").strip()
+             print(text if text else "(kein Feedback)")
+         else:
+             err = (getattr(coach_out, "error", "") or "").strip()
+@@ -17,18 +15,36 @@ def print_coach_block(coach_out) -> None:
+         print()
+         return
+ 
+-    # Alt: dict-Fallback
++    # 2) dict-Fallback
+     if isinstance(coach_out, dict):
+-        ok = bool(coach_out.get("success", False))
+-        if ok:
+-            text = str(coach_out.get("feedback_text", "") or "").strip()
+-            print(text if text else "(kein Feedback)")
++        if coach_out.get("success"):
++            print((coach_out.get("feedback_text") or "").strip())
+         else:
+-            err = str(coach_out.get("error", "") or "").strip()
+-            print(f"(Fehler) {err if err else 'Coach nicht verfügbar.'}")
++            print(f"(Fehler) {coach_out.get('error', 'Coach nicht verfügbar.')}")
++        print()
++        return
++
++    # 3) String direkt
++    if isinstance(coach_out, str):
++        print(coach_out.strip() if coach_out.strip() else "(kein Feedback)")
++        print()
++        return
++
++    # 4) OpenAI Responses API Objekt
++    if hasattr(coach_out, "output_text"):
++        text = (coach_out.output_text or "").strip()
++        print(text if text else "(Fehler) output_text leer.")
++        print()
++        return
++
++    # 5) Letzter Rettungsanker: alles zu String
++    try:
++        text = str(coach_out).strip()
++        print(text if text else "(Fehler) Leere Coach-Antwort.")
+         print()
+         return
++    except Exception:
++        pass
+ 
+-    # Unbekannt
+     print("(Fehler) Unbekanntes Coach-Format.")
+     print()
+\ No newline at end of file
+diff --git a/sprachapp_main.py b/sprachapp_main.py
+index 8bac178..57f4e96 100644
+--- a/sprachapp_main.py
++++ b/sprachapp_main.py
+@@ -1,5 +1,39 @@
+-# sprachapp.py
+-from sprachapp.cli import main
++# sprachapp_main.py
++from __future__ import annotations
++
++from pathlib import Path
++import os
++
++# Auto-load env vars from sprachapp.env (if present)
++try:
++    from dotenv import load_dotenv  # type: ignore
++except Exception:
++    load_dotenv = None
++
++
++def _load_env() -> None:
++    if load_dotenv is None:
++        return
++
++    base = Path(__file__).resolve().parent
++
++    # 1) Projekt-Root (./sprachapp.env)
++    candidates = [
++        base / "sprachapp.env",
++        # 2) Separater Secrets-Ordner relativ zum Projekt
++        base.parent.parent / "sprachappKeys" / ".env",
++    ]
++
++    for env_path in candidates:
++        if env_path.exists():
++            load_dotenv(env_path, override=False)
++            break
++
++
++def main() -> None:
++    _load_env()
++    from sprachapp.cli import main as cli_main
++    cli_main()
+ 
+ if __name__ == "__main__":
+     main()
+\ No newline at end of file
