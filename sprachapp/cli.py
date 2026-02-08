@@ -152,7 +152,11 @@ def cmd_define_vocab_list(args: argparse.Namespace) -> None:
         term = r.get("term")
         level = r.get("difficulty")
         definition = r.get("definition_text")
-        print(f"- {term} [{level}] — {definition}")
+
+        practiced = r.get("practice_count", 0)
+        last = r.get("last_practiced_at") or "-"
+
+        print(f"- {term} [{level}] (practiced={practiced}, last={last}) — {definition}")
 
 
 # Focus q1
