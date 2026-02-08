@@ -42,3 +42,4 @@ data/**
 
 # But keep define terms file for --auto
 !data/define_terms.json
+sprachapp.env
