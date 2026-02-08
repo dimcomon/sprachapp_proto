@@ -229,7 +229,12 @@ def get_vocab_by_term(term: str) -> dict | None:
 
 
 def get_vocab_random() -> dict | None:
-    """Hole eine zufällige Vokabel (MVP: ORDER BY RANDOM())."""
+    """
+    Hole eine zufällige Vokabel mit einfacher Priorisierung:
+    - zuerst ungeübte (last_practiced_at IS NULL),
+    - sonst die am längsten nicht geübten,
+    - bei Gleichstand zufällig.
+    """
     con = get_con()
     con.row_factory = sqlite3.Row
     cur = con.cursor()
@@ -241,7 +246,10 @@ def get_vocab_random() -> dict | None:
             example_1, example_2, source,
             created_at, updated_at, last_practiced_at, practice_count
         FROM vocab
-        ORDER BY RANDOM()
+        ORDER BY
+            (last_practiced_at IS NOT NULL) ASC,  -- NULL zuerst
+            last_practiced_at ASC,                -- älteste zuerst
+            RANDOM()
         LIMIT 1
         """
     ).fetchone()
