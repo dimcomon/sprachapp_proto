@@ -322,4 +322,60 @@ def mark_vocab_practiced(vocab_id: int) -> None:
     con.close()
 
 
+def create_session_v2(
+    *,
+    template_id: int,
+    step_order: int,
+    step_type: str,
+    content_ref: str | None = None,
+    started_at: str | None = None,
+) -> int:
+    """Legt eine neue Session (open) an und gibt die Session-ID zurück."""
+    from datetime import datetime, UTC
 
+    if started_at is None:
+        started_at = datetime.now(UTC).isoformat()
+
+    con = get_con()
+    cur = con.cursor()
+    cur.execute(
+        """
+        INSERT INTO sessions_v2
+        (template_id, step_order, step_type, content_ref, status, started_at, completed_at)
+        VALUES (?, ?, ?, ?, 'open', ?, NULL)
+        """,
+        (int(template_id), int(step_order), step_type, content_ref, started_at),
+    )
+    sid = cur.lastrowid
+    con.commit()
+    con.close()
+    return int(sid)
+
+
+def list_sessions_v2(*, status: str | None = "open") -> list[dict]:
+    """Listet Sessions (default: open) nach Zeit sortiert."""
+    con = get_con()
+    con.row_factory = sqlite3.Row
+    cur = con.cursor()
+
+    if status is None:
+        rows = cur.execute(
+            """
+            SELECT *
+            FROM sessions_v2
+            ORDER BY started_at DESC
+            """
+        ).fetchall()
+    else:
+        rows = cur.execute(
+            """
+            SELECT *
+            FROM sessions_v2
+            WHERE status = ?
+            ORDER BY started_at DESC
+            """,
+            (status,),
+        ).fetchall()
+
+    con.close()
+    return [dict(r) for r in rows]

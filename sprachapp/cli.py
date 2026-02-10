@@ -13,6 +13,8 @@ from sprachapp.core.db import (
     get_vocab_random,
     mark_vocab_practiced,
     get_con,
+    create_session_v2,
+    list_sessions_v2,
 )
 from sprachapp.core.audio import (
     list_input_devices, 
@@ -547,6 +549,31 @@ def cmd_learning_path_show(args):
         print(f"{s['step_order']}. {s['step_type']} ({s['config']})")
 
 
+def cmd_sessions_list(args):
+    rows = list_sessions_v2(status=None if args.all else "open")
+    if not rows:
+        print("Keine Sessions vorhanden.")
+        return
+
+    print("\n--- SESSIONS ---")
+    for r in rows:
+        print(
+            f"- id={r['id']} template_id={r['template_id']} "
+            f"step={r['step_order']} type={r['step_type']} "
+            f"status={r['status']} started={r['started_at']} completed={r['completed_at'] or '-'}"
+        )
+
+
+def cmd_sessions_start(args):
+    sid = create_session_v2(
+        template_id=args.template_id,
+        step_order=args.step_order,
+        step_type=args.step_type,
+        content_ref=args.content_ref,
+    )
+    print(f"Session gestartet: id={sid}")
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="sprachapp")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -679,6 +706,18 @@ def build_parser() -> argparse.ArgumentParser:
     lp_show_cmd = lp_show.add_parser("show", help="Lernpfad anzeigen")
     lp_show_cmd.add_argument("--name", required=True, help="Name des Lernpfads")
     lp_show_cmd.set_defaults(func=cmd_learning_path_show)
+    
+    s = sub.add_parser("sessions", help="Sessions v2 (Stub): start/list")
+    s_sub = s.add_subparsers(dest="s_cmd", required=True)
+
+    s_list = s_sub.add_parser("list", help="Sessions anzeigen")
+    s_list.add_argument("--all", action="store_true", help="auch completed anzeigen")
+
+    s_start = s_sub.add_parser("start", help="Session starten (Stub)")
+    s_start.add_argument("--template-id", type=int, required=True)
+    s_start.add_argument("--step-order", type=int, required=True)
+    s_start.add_argument("--step-type", required=True, choices=["news", "define_vocab", "review"])
+    s_start.add_argument("--content-ref", default=None)
     return p
 
 
@@ -827,5 +866,15 @@ def main():
             smoke_asr=args.smoke_asr,
         ))
 
+    if args.cmd == "sessions":
+        if args.s_cmd == "list":
+            cmd_sessions_list(args)
+            return
+        if args.s_cmd == "start":
+            cmd_sessions_start(args)
+            return
+
 if __name__ == "__main__":
     main()
+
+    
