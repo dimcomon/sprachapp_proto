@@ -505,6 +505,48 @@ def cmd_learning_paths_list(args):
         print(f"- {r['name']} [{r['level']}] — {r['description']}")
 
 
+def cmd_learning_path_show(args):
+    con = get_con()
+    con.row_factory = sqlite3.Row
+    cur = con.cursor()
+
+    tpl = cur.execute(
+        """
+        SELECT id, name, level, description
+        FROM learning_path_templates
+        WHERE name = ?
+        """,
+        (args.name,),
+    ).fetchone()
+
+    if not tpl:
+        print(f"Lernpfad nicht gefunden: {args.name}")
+        con.close()
+        return
+
+    steps = cur.execute(
+        """
+        SELECT step_order, step_type, config
+        FROM learning_path_template_steps
+        WHERE template_id = ?
+        ORDER BY step_order
+        """,
+        (tpl["id"],),
+    ).fetchall()
+
+    con.close()
+
+    print(f"\nLernpfad: {tpl['name']} [{tpl['level']}]")
+    print(tpl["description"])
+    if not steps:
+        print("Keine Schritte definiert.")
+        return
+
+    print("\nSchritte:")
+    for s in steps:
+        print(f"{s['step_order']}. {s['step_type']} ({s['config']})")
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="sprachapp")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -632,7 +674,11 @@ def build_parser() -> argparse.ArgumentParser:
     
     lp = sub.add_parser("learning-paths", help="Lernpfade anzeigen (Templates).")
     lp.set_defaults(func=cmd_learning_paths_list)
+    lp_show = lp.add_subparsers(dest="lp_cmd")
 
+    lp_show_cmd = lp_show.add_parser("show", help="Lernpfad anzeigen")
+    lp_show_cmd.add_argument("--name", required=True, help="Name des Lernpfads")
+    lp_show_cmd.set_defaults(func=cmd_learning_path_show)
     return p
 
 
@@ -642,6 +688,10 @@ def main():
 
     ensure_db()
     if args.cmd == "learning-paths":
+        args.func(args)
+        return
+
+    if args.cmd == "learning-paths" and hasattr(args, "func"):
         args.func(args)
         return
 
