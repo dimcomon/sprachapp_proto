@@ -91,6 +91,22 @@ def ensure_db() -> None:
         );
         """
     )
+    
+    # --- sessions v2 (MVP7 - Struktur) ---
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS sessions_v2 (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            template_id INTEGER NOT NULL,
+            step_order INTEGER NOT NULL,
+            step_type TEXT NOT NULL,        -- news | define_vocab | review
+            content_ref TEXT,               -- z. B. news_id, vocab_id (Text/JSON)
+            status TEXT NOT NULL DEFAULT 'open',
+            started_at TEXT NOT NULL,
+            completed_at TEXT
+        );
+        """
+    )
     con.commit()
     con.close()
 
