@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import sqlite3
 from pathlib import Path
 
 from sprachapp.core.db import (
@@ -11,6 +12,7 @@ from sprachapp.core.db import (
     get_vocab_by_term,
     get_vocab_random,
     mark_vocab_practiced,
+    get_con,
 )
 from sprachapp.core.audio import (
     list_input_devices, 
@@ -477,6 +479,32 @@ def cmd_define_vocab_practice(args: argparse.Namespace) -> None:
     mark_vocab_practiced(vocab["id"])
     print(f"(progress) practiced={vocab['practice_count'] + 1}")
 
+
+def cmd_learning_paths_list(args):
+    con = get_con()
+    con.row_factory = sqlite3.Row
+    cur = con.cursor()
+
+    rows = cur.execute(
+        """
+        SELECT name, level, description
+        FROM learning_path_templates
+        WHERE is_active = 1
+        ORDER BY level, name
+        """
+    ).fetchall()
+
+    con.close()
+
+    if not rows:
+        print("Keine Lernpfade vorhanden.")
+        return
+
+    print("\n--- LERNPFADE ---")
+    for r in rows:
+        print(f"- {r['name']} [{r['level']}] — {r['description']}")
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="sprachapp")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -601,6 +629,10 @@ def build_parser() -> argparse.ArgumentParser:
     c.add_argument("--load-model", action="store_true", help="Lädt Whisper base Modell (kann dauern).")
     c.add_argument("--list-devices", action="store_true", help="Listet Input-Geräte (sounddevice) auf.")
     c.add_argument("--smoke-asr", action="store_true", help="Erzeugt Test-WAV und führt transcribe_with_whisper aus.")
+    
+    lp = sub.add_parser("learning-paths", help="Lernpfade anzeigen (Templates).")
+    lp.set_defaults(func=cmd_learning_paths_list)
+
     return p
 
 
@@ -609,6 +641,10 @@ def main():
     args = parser.parse_args()
 
     ensure_db()
+    if args.cmd == "learning-paths":
+        args.func(args)
+        return
+
     if args.cmd == "speak":
         if args.list_devices:
             list_input_devices()

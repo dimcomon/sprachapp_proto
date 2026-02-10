@@ -66,6 +66,31 @@ def ensure_db() -> None:
     cur.execute("CREATE INDEX IF NOT EXISTS idx_vocab_term ON vocab(term);")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_vocab_last_practiced ON vocab(last_practiced_at);")
 
+    # --- learning path templates (MVP7 - Struktur) ---
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS learning_path_templates (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT NOT NULL UNIQUE,
+            level TEXT NOT NULL,
+            description TEXT,
+            is_active INTEGER NOT NULL DEFAULT 1,
+            created_at TEXT NOT NULL
+        );
+        """
+    )
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS learning_path_template_steps (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            template_id INTEGER NOT NULL,
+            step_order INTEGER NOT NULL,
+            step_type TEXT NOT NULL,        -- news | define_vocab | review
+            config TEXT,                    -- JSON als Text (Parameter)
+            FOREIGN KEY(template_id) REFERENCES learning_path_templates(id)
+        );
+        """
+    )
     con.commit()
     con.close()
 
