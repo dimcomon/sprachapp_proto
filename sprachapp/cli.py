@@ -627,6 +627,29 @@ def cmd_learning_path_start(args):
         print(f"- Session angelegt: id={sid} step={s['step_order']} type={s['step_type']}")
 
 
+def cmd_sessions_run(args):
+    rows = list_sessions_v2(status=None)
+    target = next((r for r in rows if r["id"] == args.id), None)
+
+    if not target:
+        print(f"Session nicht gefunden: id={args.id}")
+        return
+
+    print(f"\nStarte Session id={args.id} type={target['step_type']}")
+
+    if target["step_type"] == "news":
+        print("(Stub) → würde News-Flow starten")
+
+    elif target["step_type"] == "define_vocab":
+        print("(Stub) → würde Define-Vocab-Flow starten")
+
+    elif target["step_type"] == "review":
+        print("(Stub) → würde Review-Flow starten")
+
+    else:
+        print("Unbekannter step_type")
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="sprachapp")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -778,6 +801,9 @@ def build_parser() -> argparse.ArgumentParser:
     
     s_complete = s_sub.add_parser("complete", help="Session abschließen")
     s_complete.add_argument("--id", type=int, required=True)
+
+    s_run = s_sub.add_parser("run", help="Session ausführen (Stub)")
+    s_run.add_argument("--id", type=int, required=True)
 
     return p
 
@@ -936,6 +962,9 @@ def main():
             return
         if args.s_cmd == "complete":
             cmd_sessions_complete(args)
+            return
+        if args.s_cmd == "run":
+            cmd_sessions_run(args)
             return
 
 if __name__ == "__main__":
