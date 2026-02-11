@@ -580,6 +580,53 @@ def cmd_sessions_complete(args):
     print(f"Session completed: id={args.id}")
 
 
+def cmd_learning_path_start(args):
+    con = get_con()
+    con.row_factory = sqlite3.Row
+    cur = con.cursor()
+
+    tpl = cur.execute(
+        """
+        SELECT id, name
+        FROM learning_path_templates
+        WHERE name = ?
+        """,
+        (args.name,),
+    ).fetchone()
+
+    if not tpl:
+        print(f"Lernpfad nicht gefunden: {args.name}")
+        con.close()
+        return
+
+    steps = cur.execute(
+        """
+        SELECT step_order, step_type, config
+        FROM learning_path_template_steps
+        WHERE template_id = ?
+        ORDER BY step_order
+        """,
+        (tpl["id"],),
+    ).fetchall()
+
+    con.close()
+
+    if not steps:
+        print("Keine Schritte im Lernpfad definiert.")
+        return
+
+    print(f"\nStarte Lernpfad: {tpl['name']}")
+
+    for s in steps:
+        sid = create_session_v2(
+            template_id=tpl["id"],
+            step_order=s["step_order"],
+            step_type=s["step_type"],
+            content_ref=s["config"],
+        )
+        print(f"- Session angelegt: id={sid} step={s['step_order']} type={s['step_type']}")
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="sprachapp")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -713,6 +760,10 @@ def build_parser() -> argparse.ArgumentParser:
     lp_show_cmd.add_argument("--name", required=True, help="Name des Lernpfads")
     lp_show_cmd.set_defaults(func=cmd_learning_path_show)
     
+    lp_start = lp_show.add_parser("start", help="Lernpfad starten")
+    lp_start.add_argument("--name", required=True, help="Name des Lernpfads")
+    lp_start.set_defaults(func=cmd_learning_path_start)
+
     s = sub.add_parser("sessions", help="Sessions v2 (Stub): start/list")
     s_sub = s.add_subparsers(dest="s_cmd", required=True)
 
