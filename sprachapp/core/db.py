@@ -379,3 +379,24 @@ def list_sessions_v2(*, status: str | None = "open") -> list[dict]:
 
     con.close()
     return [dict(r) for r in rows]
+
+
+def complete_session_v2(session_id: int) -> None:
+    """Setzt eine Session auf completed und schreibt completed_at."""
+    from datetime import datetime, UTC
+
+    now = datetime.now(UTC).isoformat()
+
+    con = get_con()
+    cur = con.cursor()
+    cur.execute(
+        """
+        UPDATE sessions_v2
+        SET status = 'completed',
+            completed_at = ?
+        WHERE id = ?
+        """,
+        (now, int(session_id)),
+    )
+    con.commit()
+    con.close()

@@ -15,6 +15,7 @@ from sprachapp.core.db import (
     get_con,
     create_session_v2,
     list_sessions_v2,
+    complete_session_v2,
 )
 from sprachapp.core.audio import (
     list_input_devices, 
@@ -574,6 +575,11 @@ def cmd_sessions_start(args):
     print(f"Session gestartet: id={sid}")
 
 
+def cmd_sessions_complete(args):
+    complete_session_v2(args.id)
+    print(f"Session completed: id={args.id}")
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="sprachapp")
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -674,6 +680,13 @@ def build_parser() -> argparse.ArgumentParser:
     d.add_argument("--keep-last-audios", type=int, default=10, help="Behält nur die letzten N WAVs.")
     d.add_argument("--keep-days", type=int, default=0, help="Löscht WAVs älter als X Tage (0=aus).")
 
+    # selfcheck
+    c = sub.add_parser("selfcheck", help="Technischer Systemcheck (Imports/DB/Filesystem/Report).")
+    c.add_argument("--verbose", action="store_true", help="Mehr Details bei Fehlern.")
+    c.add_argument("--load-model", action="store_true", help="Lädt Whisper base Modell (kann dauern).")
+    c.add_argument("--list-devices", action="store_true", help="Listet Input-Geräte (sounddevice) auf.")
+    c.add_argument("--smoke-asr", action="store_true", help="Erzeugt Test-WAV und führt transcribe_with_whisper aus.")
+    
     # define-vocab (neu, MVP7/A2-2)
     dv = sub.add_parser("define-vocab", help="Vokabel-Trainer (DB): add/list (ohne Coach, ohne Hints).")
     dv_sub = dv.add_subparsers(dest="dv_cmd", required=True)
@@ -691,13 +704,6 @@ def build_parser() -> argparse.ArgumentParser:
     dv_practice = dv_sub.add_parser("practice", help="Vokabel üben (Coach + Hints on-the-fly).")
     dv_practice.add_argument("--term", help="Begriff gezielt üben.")
     dv_practice.add_argument("--random", action="store_true", help="Zufällige Vokabel üben.")
-
-    # selfcheck
-    c = sub.add_parser("selfcheck", help="Technischer Systemcheck (Imports/DB/Filesystem/Report).")
-    c.add_argument("--verbose", action="store_true", help="Mehr Details bei Fehlern.")
-    c.add_argument("--load-model", action="store_true", help="Lädt Whisper base Modell (kann dauern).")
-    c.add_argument("--list-devices", action="store_true", help="Listet Input-Geräte (sounddevice) auf.")
-    c.add_argument("--smoke-asr", action="store_true", help="Erzeugt Test-WAV und führt transcribe_with_whisper aus.")
     
     lp = sub.add_parser("learning-paths", help="Lernpfade anzeigen (Templates).")
     lp.set_defaults(func=cmd_learning_paths_list)
@@ -718,6 +724,10 @@ def build_parser() -> argparse.ArgumentParser:
     s_start.add_argument("--step-order", type=int, required=True)
     s_start.add_argument("--step-type", required=True, choices=["news", "define_vocab", "review"])
     s_start.add_argument("--content-ref", default=None)
+    
+    s_complete = s_sub.add_parser("complete", help="Session abschließen")
+    s_complete.add_argument("--id", type=int, required=True)
+
     return p
 
 
@@ -873,8 +883,10 @@ def main():
         if args.s_cmd == "start":
             cmd_sessions_start(args)
             return
+        if args.s_cmd == "complete":
+            cmd_sessions_complete(args)
+            return
 
 if __name__ == "__main__":
     main()
 
-    
