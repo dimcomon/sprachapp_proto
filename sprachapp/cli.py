@@ -599,6 +599,19 @@ def cmd_learning_path_start(args):
         con.close()
         return
 
+    # Alte offene Sessions dieses Templates schließen
+    cur.execute(
+        """
+        UPDATE sessions_v2
+        SET status = 'completed',
+            completed_at = datetime('now')
+        WHERE template_id = ?
+          AND status = 'open'
+        """,
+        (tpl["id"],),
+    )
+    con.commit()
+
     steps = cur.execute(
         """
         SELECT step_order, step_type, config
@@ -617,18 +630,18 @@ def cmd_learning_path_start(args):
 
     print(f"\nStarte Lernpfad: {tpl['name']}")
 
-    for s in steps:
-        sid = create_session_v2(
-            template_id=tpl["id"],
-            step_order=s["step_order"],
-            step_type=s["step_type"],
-            content_ref=s["config"],
-        )
-        print(f"- Session angelegt: id={sid} step={s['step_order']} type={s['step_type']}")
-
+    first = steps[0]
+    sid = create_session_v2(
+        template_id=tpl["id"],
+        step_order=first["step_order"],
+        step_type=first["step_type"],
+        content_ref=first["config"],
+    )
+    print(f"- Session angelegt: id={sid} step={first['step_order']} type={first['step_type']}")
+    print("(linear) Weitere Schritte werden erst nach Abschluss freigeschaltet.")
 
 def cmd_sessions_run(args):
-    rows = list_sessions_v2(status=None)
+    rows = list_sessions_v2(status="open")
     target = next((r for r in rows if r["id"] == args.id), None)
 
     if not target:
