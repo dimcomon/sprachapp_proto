@@ -16,6 +16,7 @@ from sprachapp.core.db import (
     create_session_v2,
     list_sessions_v2,
     complete_session_v2,
+    insert_text,
 )
 from sprachapp.core.audio import (
     list_input_devices, 
@@ -599,7 +600,20 @@ def cmd_learning_path_start(args):
         con.close()
         return
 
-    # Alte offene Sessions dieses Templates schließen
+    # ---- Neuen Run erzeugen ----
+    from datetime import datetime, UTC
+    now = datetime.now(UTC).isoformat()
+
+    cur.execute(
+        """
+        INSERT INTO learning_path_runs (template_id, status, started_at, completed_at)
+        VALUES (?, 'active', ?, NULL)
+        """,
+        (tpl["id"], now),
+    )
+    run_id = cur.lastrowid
+
+    # ---- Alte offene Sessions dieses Templates schließen ----
     cur.execute(
         """
         UPDATE sessions_v2
@@ -610,8 +624,8 @@ def cmd_learning_path_start(args):
         """,
         (tpl["id"],),
     )
-    con.commit()
 
+    # ---- Schritte laden ----
     steps = cur.execute(
         """
         SELECT step_order, step_type, config
@@ -622,23 +636,75 @@ def cmd_learning_path_start(args):
         (tpl["id"],),
     ).fetchall()
 
-    con.close()
-
     if not steps:
         print("Keine Schritte im Lernpfad definiert.")
+        con.close()
         return
 
     print(f"\nStarte Lernpfad: {tpl['name']}")
 
     first = steps[0]
-    sid = create_session_v2(
-        template_id=tpl["id"],
-        step_order=first["step_order"],
-        step_type=first["step_type"],
-        content_ref=first["config"],
+
+    # ---- Text ggf. speichern ----
+    text_id = None
+    if first["step_type"] in ("news", "book"):
+        from pathlib import Path
+        
+        fname = "news.txt" if first["step_type"] == "news" else "book.txt"
+        p = Path(fname)
+
+        if not p.exists():
+            print(f"Fehlt im Repo-Root: {fname}")
+            con.close()
+            return
+
+        content = p.read_text(encoding="utf-8").strip()
+        if not content:
+            print(f"Datei ist leer: {fname}")
+            con.close()
+            return
+
+        title = f"{first['step_type']} (root file)"
+
+        # WICHTIG: texts mit derselben DB-Verbindung schreiben (sonst "database is locked")
+        cur.execute(
+            """
+            INSERT INTO texts (source_type, title, content, created_at)
+            VALUES (?, ?, ?, datetime('now'))
+            """,
+            (first["step_type"], title, content),
+        )
+        text_id = cur.lastrowid
+
+    # ---- Erste Session anlegen (WICHTIG: gleiche DB-Verbindung verwenden) ----
+    from datetime import datetime, UTC
+    started_at = datetime.now(UTC).isoformat()
+
+    cur.execute(
+        """
+        INSERT INTO sessions_v2
+            (template_id, step_order, step_type, content_ref, text_id, run_id, status, started_at, completed_at)
+        VALUES
+            (?, ?, ?, ?, ?, ?, 'open', ?, NULL)
+        """,
+        (
+            int(tpl["id"]),
+            int(first["step_order"]),
+            first["step_type"],
+            first["config"],
+            text_id,
+            run_id,
+            started_at,
+        ),
     )
+    sid = cur.lastrowid
+
+    con.commit()
+    con.close()
+
     print(f"- Session angelegt: id={sid} step={first['step_order']} type={first['step_type']}")
     print("(linear) Weitere Schritte werden erst nach Abschluss freigeschaltet.")
+
 
 def cmd_sessions_run(args):
     rows = list_sessions_v2(status="open")
@@ -648,19 +714,379 @@ def cmd_sessions_run(args):
         print(f"Session nicht gefunden: id={args.id}")
         return
 
-    print(f"\nStarte Session id={args.id} type={target['step_type']}")
+    stype = target["step_type"]
+    print(f"\nStarte Session id={args.id} type={stype}")
 
-    if target["step_type"] == "news":
-        print("(Stub) → würde News-Flow starten")
+    # ---- NEWS / BOOK: Text laden -> Auswahl -> Session auto-complete ----
+    if stype in ("news", "book"):
+        # Local imports, damit du oben nichts anfassen musst
+        from sprachapp.core.db import get_con, complete_session_v2
 
-    elif target["step_type"] == "define_vocab":
-        print("(Stub) → würde Define-Vocab-Flow starten")
+        text_id = target.get("text_id")
+        if not text_id:
+            print("Kein text_id in dieser Session. (Lernpfad muss beim Start Text speichern.)")
+            return
 
-    elif target["step_type"] == "review":
-        print("(Stub) → würde Review-Flow starten")
+        con = get_con()
+        con.row_factory = sqlite3.Row
+        cur = con.cursor()
+        row = cur.execute(
+            "SELECT content FROM texts WHERE id = ?",
+            (text_id,),
+        ).fetchone()
+        con.close()
 
-    else:
-        print("Unbekannter step_type")
+        if not row:
+            print(f"Kein Text gefunden für text_id={text_id}.")
+            return
+
+        text = (row["content"] or "").strip()
+        if not text:
+            print("Text ist leer.")
+            return
+
+        print("\n--- TEXT (Preview) ---\n")
+        print(text[:1200])
+        if len(text) > 1200:
+            print("\n...(gekürzt)...")
+
+        print("\n--- RETELL ---")
+        input("Erzähle den Inhalt in eigenen Worten (drücke Enter wenn fertig) ")
+
+        # Vorschläge + Auswahl-Loop
+        suggestions = generate_vocab_suggestions_stub(text)
+        while True:
+            chosen = choose_vocab_from_suggestions(suggestions)
+
+            if chosen is None:  # neu
+                suggestions = generate_vocab_suggestions_stub(text)
+                continue
+
+            if chosen == []:  # quit
+                print("Abgebrochen: keine Wörter gespeichert.")
+                break
+
+            from sprachapp.core.db import add_vocab, link_session_vocab
+
+            print("Speichere Wörter...")
+            for w in chosen:
+                vocab_id = add_vocab(
+                    term=w,
+                    lang="de",
+                    difficulty="medium",
+                    definition_text="(wird später ergänzt)"
+                )
+                link_session_vocab(target["id"], vocab_id)
+                print(f"- gespeichert & verknüpft: {w}")
+
+            break
+
+        complete_session_v2(target["id"])
+        print("Session automatisch abgeschlossen.")
+        return
+
+    # ---- DEFINE_VOCAB ----
+    if stype == "define_vocab":
+        from sprachapp.core.db import get_con, complete_session_v2
+
+        con = get_con()
+        con.row_factory = sqlite3.Row
+        cur = con.cursor()
+
+        # Wörter stammen aus der vorherigen Session (step_order - 1) im gleichen Run
+        run_id = target.get("run_id")
+        if not run_id:
+            print("Fehlt run_id in dieser Session. (Lernpfad muss Run-IDs setzen.)")
+            con.close()
+            return
+
+        prev = cur.execute(
+            """
+            SELECT id
+            FROM sessions_v2
+            WHERE run_id = ?
+              AND step_order = ?
+            """,
+            (run_id, int(target["step_order"]) - 1),
+        ).fetchone()
+
+        if not prev:
+            print("Keine vorherige Session im Run gefunden.")
+            con.close()
+            return
+
+        prev_session_id = int(prev["id"])
+
+        rows = cur.execute(
+            """
+            SELECT v.id, v.term
+            FROM session_vocab sv
+            JOIN vocab v ON sv.vocab_id = v.id
+            WHERE sv.session_id = ?
+            ORDER BY v.id ASC
+            """,
+            (prev_session_id,),
+        ).fetchall()
+
+        con.close()
+
+        if not rows:
+            print("Keine Wörter für diese Define-Session gefunden (vorherige Session hatte keine Auswahl).")
+            return
+
+        print("\n--- DEFINE SESSION ---")
+
+        for r in rows:
+            print(f"\nWort: {r['term']}")
+            input("Erkläre das Wort in eigenen Worten (Enter wenn fertig): ")
+            input("Beispielsatz 1 (Enter wenn fertig): ")
+            input("Beispielsatz 2 (Enter wenn fertig): ")
+
+        complete_session_v2(target["id"])
+        print("Define-Session abgeschlossen.")
+        return
+
+    # ---- REVIEW ----
+    if stype == "review":
+        from sprachapp.core.db import get_con, complete_session_v2
+        import random
+
+        con = get_con()
+        con.row_factory = sqlite3.Row
+        cur = con.cursor()
+
+        run_id = target.get("run_id")
+        if not run_id:
+            print("Fehlt run_id.")
+            con.close()
+            return
+
+        # Alle Vokabeln dieses Runs holen
+        rows = cur.execute(
+            """
+            SELECT DISTINCT v.id, v.term
+            FROM sessions_v2 s
+            JOIN session_vocab sv ON s.id = sv.session_id
+            JOIN vocab v ON v.id = sv.vocab_id
+            WHERE s.run_id = ?
+            """,
+            (run_id,),
+        ).fetchall()
+
+        con.close()
+
+        if not rows:
+            print("Keine Vokabeln für Review gefunden.")
+            return
+
+        word = random.choice(rows)
+
+        print("\n--- REVIEW ---")
+        print(f"Wort: {word['term']}")
+        input("Erkläre das Wort in eigenen Worten (Enter wenn fertig): ")
+        input("Beispielsatz 1 (Enter wenn fertig): ")
+        input("Beispielsatz 2 (Enter wenn fertig): ")
+
+        complete_session_v2(target["id"])
+        print("Review-Session abgeschlossen.")
+        return
+
+    print("Unbekannter step_type")
+
+
+def generate_vocab_suggestions_stub(text: str) -> list[str]:
+    """
+    Stub: simuliert KI-Wortvorschläge aus einem Text.
+    Später wird hier der echte OpenAI-Call eingebaut.
+    """
+    # Dummy-Vorschläge (nur für Strukturtest)
+    return ["Beispielwort1", "Beispielwort2", "Beispielwort3"]
+
+
+def choose_vocab_from_suggestions(suggestions: list[str]) -> list[str] | None:
+    """
+    Gibt eine Liste ausgewählter Wörter zurück.
+    - 'neu' => None (Caller soll neu generieren)
+    - 'quit' => [] (Abbruch ohne Auswahl)
+    - '1,3' => ausgewählte Wörter
+    """
+    while True:
+        print("\nVorschläge:")
+        for i, w in enumerate(suggestions, start=1):
+            print(f"{i}) {w}")
+
+        raw = input("\nWähle (z.B. 1,3) | 'neu' | 'quit': ").strip().lower()
+
+        if raw == "neu":
+            return None
+        if raw == "quit":
+            return []
+
+        # Zahlenliste parsen
+        parts = [p.strip() for p in raw.split(",") if p.strip()]
+        if not parts:
+            print("Bitte eine Auswahl eingeben (z.B. 1,3) oder 'neu'/'quit'.")
+            continue
+
+        idxs: list[int] = []
+        ok = True
+        for p in parts:
+            if not p.isdigit():
+                ok = False
+                break
+            idxs.append(int(p))
+
+        if not ok:
+            print("Ungültig. Nutze z.B. 1,3 oder 'neu' oder 'quit'.")
+            continue
+
+        chosen: list[str] = []
+        for i in idxs:
+            if i < 1 or i > len(suggestions):
+                print(f"Index außerhalb der Liste: {i}")
+                ok = False
+                break
+            chosen.append(suggestions[i - 1])
+
+        if not ok:
+            continue
+
+        # Duplikate entfernen, Reihenfolge behalten
+        seen = set()
+        uniq = []
+        for w in chosen:
+            if w not in seen:
+                seen.add(w)
+                uniq.append(w)
+
+        return uniq
+
+
+def cmd_debug_vocab_suggest(args):
+    text = "Dummy-Text für Vorschläge."
+    suggestions = generate_vocab_suggestions_stub(text)
+
+    while True:
+        chosen = choose_vocab_from_suggestions(suggestions)
+
+        if chosen is None:
+            print("(debug) neu generieren…")
+            suggestions = generate_vocab_suggestions_stub(text)
+            continue
+
+        if chosen == []:
+            print("(debug) quit")
+            return
+
+        print("(debug) gewählt:", ", ".join(chosen))
+        return
+
+
+def cmd_learning_path_next(args):
+    con = get_con()
+    con.row_factory = sqlite3.Row
+    cur = con.cursor()
+
+    tpl = cur.execute(
+        "SELECT id, name FROM learning_path_templates WHERE name = ?",
+        (args.name,),
+    ).fetchone()
+
+    if not tpl:
+        print(f"Lernpfad nicht gefunden: {args.name}")
+        con.close()
+        return
+
+    # Letzten aktiven Run holen
+    run = cur.execute(
+        """
+        SELECT id
+        FROM learning_path_runs
+        WHERE template_id = ?
+          AND status = 'active'
+        ORDER BY started_at DESC, id DESC
+        LIMIT 1
+        """,
+        (tpl["id"],),
+    ).fetchone()
+
+    if not run:
+        print("Kein aktiver Run gefunden. Starte zuerst: learning-paths start --name ...")
+        con.close()
+        return
+
+    run_id = int(run["id"])
+
+    # Schritte des Templates
+    steps = cur.execute(
+        """
+        SELECT step_order, step_type, config
+        FROM learning_path_template_steps
+        WHERE template_id = ?
+        ORDER BY step_order
+        """,
+        (tpl["id"],),
+    ).fetchall()
+
+    if not steps:
+        print("Keine Schritte im Lernpfad definiert.")
+        con.close()
+        return
+
+    # Höchsten completed step_order NUR in diesem Run
+    row = cur.execute(
+        """
+        SELECT MAX(step_order)
+        FROM sessions_v2
+        WHERE run_id = ?
+          AND status = 'completed'
+        """,
+        (run_id,),
+    ).fetchone()
+
+    max_completed = row[0] if row and row[0] is not None else 0
+    next_order = max_completed + 1
+
+    next_step = next((s for s in steps if int(s["step_order"]) == int(next_order)), None)
+    if not next_step:
+        # Run als completed markieren
+        cur.execute(
+            """
+            UPDATE learning_path_runs
+            SET status='completed',
+                completed_at=datetime('now')
+            WHERE id = ?
+            """,
+            (run_id,),
+        )
+        con.commit()
+        con.close()
+        print("Lernpfad ist fertig. Run wurde abgeschlossen.")
+        return
+
+    # Optional: verhindern, dass mehrere open Sessions im selben Run existieren
+    open_row = cur.execute(
+        "SELECT id FROM sessions_v2 WHERE run_id = ? AND status = 'open' LIMIT 1",
+        (run_id,),
+    ).fetchone()
+    if open_row:
+        con.close()
+        print(f"Es gibt bereits eine offene Session (id={open_row[0]}). Bitte erst ausführen/abschließen.")
+        return
+
+    con.close()
+
+    # Für dein Template ist step 2/3 nicht news/book, daher text_id=None.
+    sid = create_session_v2(
+        template_id=tpl["id"],
+        run_id=run_id,
+        step_order=int(next_step["step_order"]),
+        step_type=next_step["step_type"],
+        content_ref=next_step["config"],
+        text_id=None,
+    )
+
+    print(f"Nächste Session angelegt: id={sid} run_id={run_id} step={next_step['step_order']} type={next_step['step_type']}")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -800,6 +1226,10 @@ def build_parser() -> argparse.ArgumentParser:
     lp_start.add_argument("--name", required=True, help="Name des Lernpfads")
     lp_start.set_defaults(func=cmd_learning_path_start)
 
+    lp_next = lp_show.add_parser("next", help="Nächsten Schritt als Session anlegen (linear, manuell)")
+    lp_next.add_argument("--name", required=True, help="Name des Lernpfads")
+    lp_next.set_defaults(func=cmd_learning_path_next)
+
     s = sub.add_parser("sessions", help="Sessions v2 (Stub): start/list")
     s_sub = s.add_subparsers(dest="s_cmd", required=True)
 
@@ -818,6 +1248,9 @@ def build_parser() -> argparse.ArgumentParser:
     s_run = s_sub.add_parser("run", help="Session ausführen (Stub)")
     s_run.add_argument("--id", type=int, required=True)
 
+    dbg = sub.add_parser("debug-vocab-suggest", help="Debug: Vokabelvorschläge auswählen (Stub).")
+    dbg.set_defaults(func=cmd_debug_vocab_suggest)
+
     return p
 
 
@@ -826,6 +1259,10 @@ def main():
     args = parser.parse_args()
 
     ensure_db()
+    if hasattr(args, "func"):
+        args.func(args)
+        return
+
     if args.cmd == "learning-paths":
         args.func(args)
         return

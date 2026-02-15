@@ -107,6 +107,61 @@ def ensure_db() -> None:
         );
         """
     )
+
+    # sessions_v2: text_id nachrüsten (falls fehlt)
+    cols = [r[1] for r in cur.execute("PRAGMA table_info(sessions_v2);").fetchall()]
+    if "text_id" not in cols:
+        cur.execute("ALTER TABLE sessions_v2 ADD COLUMN text_id INTEGER;")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_sessions_v2_text_id ON sessions_v2(text_id);")
+
+    # --- texts (MVP7) ---
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS texts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            source_type TEXT NOT NULL,      -- news | book
+            title TEXT,
+            content TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        );
+        """
+    )
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_texts_source_type ON texts(source_type);")
+    # --- session_vocab (MVP7) ---
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS session_vocab (
+            session_id INTEGER NOT NULL,
+            vocab_id INTEGER NOT NULL,
+            PRIMARY KEY (session_id, vocab_id),
+            FOREIGN KEY(session_id) REFERENCES sessions_v2(id),
+            FOREIGN KEY(vocab_id) REFERENCES vocab(id)
+        );
+        """
+    )
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_session_vocab_session ON session_vocab(session_id);")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_session_vocab_vocab ON session_vocab(vocab_id);")
+
+    # --- learning path runs (MVP7) ---
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS learning_path_runs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            template_id INTEGER NOT NULL,
+            status TEXT NOT NULL DEFAULT 'active',   -- active | completed | aborted
+            started_at TEXT NOT NULL,
+            completed_at TEXT
+        );
+        """
+    )
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_lpr_template_id ON learning_path_runs(template_id);")
+
+    # sessions_v2: run_id nachrüsten (falls fehlt)
+    cols = [r[1] for r in cur.execute("PRAGMA table_info(sessions_v2);").fetchall()]
+    if "run_id" not in cols:
+        cur.execute("ALTER TABLE sessions_v2 ADD COLUMN run_id INTEGER;")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_sessions_v2_run_id ON sessions_v2(run_id);")
+
     con.commit()
     con.close()
 
@@ -163,67 +218,42 @@ def insert_session(
     return int(session_id)
 
 
-# -------------------------------------------------------------------
-# Vocab (MVP7 / Define-Vocab) – minimaler DB-Layer
-# -------------------------------------------------------------------
-def add_vocab(
-    *,
-    term: str,
-    definition_text: str,
-    difficulty: str = "medium",
-    lang: str = "de",
-    example_1: str | None = None,
-    example_2: str | None = None,
-    source: str | None = "manual",
-) -> int:
+def add_vocab(term: str, lang: str, difficulty: str, definition_text: str) -> int:
     """
-    Legt eine Vokabel an (oder aktualisiert sie, falls term bereits existiert).
-    Hints werden NICHT gespeichert (werden jedes Mal neu generiert).
+    Speichert eine Vokabel und gibt ihre ID zurück.
+    Wenn der Begriff schon existiert, wird keine neue Zeile erzeugt,
+    sondern die existierende ID zurückgegeben.
     """
     from datetime import datetime, UTC
 
     now = datetime.now(UTC).isoformat()
-    term = term.strip()
-    definition_text = definition_text.strip()
 
     con = get_con()
     cur = con.cursor()
 
-    # UPSERT per UNIQUE(term)
+    # 1) Falls schon vorhanden -> ID zurückgeben
+    row = cur.execute(
+        "SELECT id FROM vocab WHERE term = ?",
+        (term,),
+    ).fetchone()
+    if row:
+        con.close()
+        return int(row[0])
+
+    # 2) Sonst neu anlegen -> ID zurückgeben
     cur.execute(
         """
-        INSERT INTO vocab (
-            term, lang, difficulty, definition_text,
-            example_1, example_2, source,
-            created_at, updated_at
-        )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ON CONFLICT(term) DO UPDATE SET
-            lang=excluded.lang,
-            difficulty=excluded.difficulty,
-            definition_text=excluded.definition_text,
-            example_1=excluded.example_1,
-            example_2=excluded.example_2,
-            source=excluded.source,
-            updated_at=excluded.updated_at
+        INSERT INTO vocab
+            (term, lang, difficulty, definition_text, created_at, updated_at, last_practiced_at, practice_count)
+        VALUES
+            (?, ?, ?, ?, ?, ?, NULL, 0)
         """,
-        (
-            term,
-            lang,
-            difficulty,
-            definition_text,
-            example_1,
-            example_2,
-            source,
-            now,
-            now,
-        ),
+        (term, lang, difficulty, definition_text, now, now),
     )
-
-    vocab_id = cur.execute("SELECT id FROM vocab WHERE term = ?", (term,)).fetchone()[0]
+    vid = cur.lastrowid
     con.commit()
     con.close()
-    return int(vocab_id)
+    return int(vid)
 
 
 def list_vocab_alpha() -> list[dict[str, Any]]:
@@ -328,6 +358,8 @@ def create_session_v2(
     step_order: int,
     step_type: str,
     content_ref: str | None = None,
+    text_id: int | None = None,
+    run_id: int | None = None,
     started_at: str | None = None,
 ) -> int:
     """Legt eine neue Session (open) an und gibt die Session-ID zurück."""
@@ -341,10 +373,10 @@ def create_session_v2(
     cur.execute(
         """
         INSERT INTO sessions_v2
-        (template_id, step_order, step_type, content_ref, status, started_at, completed_at)
-        VALUES (?, ?, ?, ?, 'open', ?, NULL)
+        (template_id, step_order, step_type, content_ref, text_id, run_id, status, started_at, completed_at)
+        VALUES (?, ?, ?, ?, ?, ?, 'open', ?, NULL)
         """,
-        (int(template_id), int(step_order), step_type, content_ref, started_at),
+        (int(template_id), int(step_order), step_type, content_ref, text_id, run_id, started_at),
     )
     sid = cur.lastrowid
     con.commit()
@@ -400,3 +432,41 @@ def complete_session_v2(session_id: int) -> None:
     )
     con.commit()
     con.close()
+
+
+def insert_text(source_type: str, title: str | None, content: str) -> int:
+    """Speichert einen Text (news/book) und gibt die text_id zurück."""
+    from datetime import datetime, UTC
+
+    now = datetime.now(UTC).isoformat()
+
+    con = get_con()
+    cur = con.cursor()
+    cur.execute(
+        """
+        INSERT INTO texts (source_type, title, content, created_at)
+        VALUES (?, ?, ?, ?)
+        """,
+        (source_type, title, content, now),
+    )
+    tid = cur.lastrowid
+    con.commit()
+    con.close()
+    return int(tid)
+
+
+def link_session_vocab(session_id: int, vocab_id: int) -> None:
+    """Verknüpft eine Session mit einer Vokabel (idempotent über PRIMARY KEY)."""
+    con = get_con()
+    cur = con.cursor()
+    cur.execute(
+        """
+        INSERT OR IGNORE INTO session_vocab (session_id, vocab_id)
+        VALUES (?, ?)
+        """,
+        (int(session_id), int(vocab_id)),
+    )
+    con.commit()
+    con.close()
+
+
